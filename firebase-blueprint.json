@@ -1,0 +1,166 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile data stored under their authenticated UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 120 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "homeCity": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "emergencyContactName": { "type": "string", "maxLength": 100 },
+        "emergencyContactPhone": { "type": "string", "maxLength": 30 },
+        "travelStyle": { "type": "string", "maxLength": 50 },
+        "dietaryPreference": { "type": "string", "maxLength": 50 },
+        "bloodGroup": { "type": "string", "maxLength": 10 },
+        "bio": { "type": "string", "maxLength": 500 },
+        "preferredCurrency": { "type": "string", "maxLength": 10 },
+        "registrationCompleted": { "type": "boolean" },
+        "isPro": { "type": "boolean" },
+        "proPlan": { "type": "string", "maxLength": 50 },
+        "proPaymentId": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Trip": {
+      "title": "Trip Plan",
+      "description": "A travel journey with itinerary, budget, members and timeline",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "ownerName": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 150 },
+        "destination": { "type": "string", "maxLength": 120 },
+        "startDate": { "type": "string", "maxLength": 30 },
+        "endDate": { "type": "string", "maxLength": 30 },
+        "budgetINR": { "type": "number" },
+        "coverImage": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["planning", "ongoing", "completed"] },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "ownerId", "title", "destination", "startDate", "endDate", "budgetINR", "status"]
+    },
+    "Activity": {
+      "title": "Trip Activity",
+      "description": "An itinerary schedule item for a specific day and time",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tripId": { "type": "string", "maxLength": 128 },
+        "day": { "type": "number" },
+        "time": { "type": "string", "maxLength": 30 },
+        "title": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "enum": ["flight", "hotel", "sightseeing", "food", "transport", "activity"] },
+        "location": { "type": "string", "maxLength": 200 },
+        "costINR": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "tripId", "day", "time", "title", "category", "costINR", "createdBy"]
+    },
+    "Expense": {
+      "title": "Trip Expense",
+      "description": "An expense entry with payer and split details in INR",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tripId": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 200 },
+        "amountINR": { "type": "number" },
+        "paidBy": { "type": "string", "maxLength": 100 },
+        "paidByUid": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["food", "stay", "travel", "tickets", "shopping", "other"] },
+        "date": { "type": "string", "maxLength": 30 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "tripId", "description", "amountINR", "paidBy", "paidByUid", "category", "date", "createdBy"]
+    },
+    "Document": {
+      "title": "Digital Travel Document",
+      "description": "Digital wallet record for boarding passes, hotel reservations, visas and IDs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tripId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "docType": { "type": "string", "enum": ["passport", "visa", "ticket", "insurance", "hotel_voucher", "id_card", "other"] },
+        "docNumber": { "type": "string", "maxLength": 100 },
+        "expiryDate": { "type": "string", "maxLength": 30 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "tripId", "title", "docType", "ownerId"]
+    },
+    "PackingItem": {
+      "title": "Packing Item",
+      "description": "Checklist item with category and packed state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tripId": { "type": "string", "maxLength": 128 },
+        "item": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "enum": ["essentials", "clothing", "electronics", "toiletries", "meds", "documents"] },
+        "packed": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "tripId", "item", "category", "packed", "createdBy"]
+    },
+    "ChatMessage": {
+      "title": "Trip Group Message",
+      "description": "Real-time communication message between travelers on the trip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tripId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderPhoto": { "type": "string", "maxLength": 500 },
+        "text": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "tripId", "senderId", "senderName", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private profile document for each registered traveler"
+    },
+    "/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Trip journeys created and managed by authenticated users"
+    },
+    "/trips/{tripId}/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "Day-wise itinerary schedule entries for a trip"
+    },
+    "/trips/{tripId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Tracked expenditures and split amounts for a trip"
+    },
+    "/trips/{tripId}/documents/{docId}": {
+      "schema": "Document",
+      "description": "Digital passes, vouchers and travel paperwork for a trip"
+    },
+    "/trips/{tripId}/packingItems/{itemId}": {
+      "schema": "PackingItem",
+      "description": "Checklist of items to pack for the trip"
+    },
+    "/trips/{tripId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Real-time trip chatter, rendezvous points, and team updates"
+    }
+  }
+}

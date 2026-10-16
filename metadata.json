@@ -1,0 +1,6 @@
+{
+  "name": "JKVoyage - Smart Travel Hub",
+  "description": "Smart travel companion featuring smart itinerary planning, group collaboration, trip expense splitting, digital wallet & documents, nearby places discovery, and group chat. Owned by JKSoftonics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

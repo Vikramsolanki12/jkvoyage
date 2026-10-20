@@ -17,6 +17,7 @@ import {
 import { Activity, ActivityCategory, Trip } from '../../types/travel.ts';
 import { detectNearbyPlaces, NearbyRecommendation } from '../../services/nearbyRecommendations.ts';
 import { EXPLORE_PLACES } from '../../data/explorePlaces.ts';
+import { resolveLocationCoordinates } from '../../services/coordinateResolver.ts';
 
 interface SuggestionsExplorerModalProps {
   isOpen: boolean;
@@ -87,6 +88,9 @@ export const SuggestionsExplorerModal: React.FC<SuggestionsExplorerModalProps> =
         ? 'sightseeing'
         : 'sightseeing';
 
+    const locationName = item.address || item.title || item.name || trip.destination;
+    const coords = await resolveLocationCoordinates(locationName, trip.destination);
+
     const newActivity: Activity = {
       id: 'act_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       tripId: trip.id,
@@ -94,23 +98,25 @@ export const SuggestionsExplorerModal: React.FC<SuggestionsExplorerModalProps> =
       time: selectedTime,
       title: item.title || item.name,
       category,
-      location: item.address || item.title || trip.destination,
+      location: locationName,
       costINR: item.estCostINR || 0,
       notes: item.insiderTip || item.description || '',
       createdBy: 'currentUser',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      latitude: coords.latitude,
+      longitude: coords.longitude
     };
 
     try {
       if (isTripCreator) {
         await onAddActivity(newActivity);
-        setFeedbackMessage(`Added "${newActivity.title}" directly to Day ${selectedDay}!`);
+        setFeedbackMessage(`📍 Added & pinned "${newActivity.title}" to Day ${selectedDay} on your map!`);
       } else if (onProposeActivity) {
         await onProposeActivity(newActivity);
-        setFeedbackMessage(`Submitted proposal for "${newActivity.title}" to trip planner!`);
+        setFeedbackMessage(`📍 Submitted proposal for "${newActivity.title}" with map pin to trip planner!`);
       }
       setAddedItemIds((prev) => [...prev, item.id]);
-      setTimeout(() => setFeedbackMessage(null), 3000);
+      setTimeout(() => setFeedbackMessage(null), 4000);
     } catch (err) {
       console.error('Failed to add suggestion:', err);
     } finally {

@@ -22,7 +22,8 @@ import {
   UserCheck,
   Trash2,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Home
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
@@ -58,6 +59,11 @@ import {
   NotificationType
 } from './types/travel.ts';
 import {
+  resolveLocationCoordinates,
+  resolveDestinationCoordinates,
+  areCoordinatesCloseToDestination
+} from './services/coordinateResolver.ts';
+import {
   subscribeUserTrips,
   createTrip,
   updateTrip,
@@ -88,7 +94,7 @@ import {
   deleteNotification
 } from './services/travelService.ts';
 
-type ActiveTab = 'itinerary' | 'explore' | 'expenses' | 'wallet' | 'packing' | 'journal' | 'chat' | 'tools';
+type ActiveTab = 'home' | 'itinerary' | 'explore' | 'expenses' | 'wallet' | 'packing' | 'journal' | 'chat' | 'tools';
 
 // Sample fallback trip ONLY for guest exploration before user logs in or registers
 const GUEST_SAMPLE_TRIP: Trip = {
@@ -305,6 +311,7 @@ function MainContent() {
   const [deleteTripModalOpen, setDeleteTripModalOpen] = useState(false);
   const [isDeletingTrip, setIsDeletingTrip] = useState(false);
   const [lockedReason, setLockedReason] = useState<string>('');
+  const [chatCornerOpen, setChatCornerOpen] = useState(false);
 
   const triggerToast = (title: string, message: string, type: NotificationType = 'general') => {
     setToastMessage({ title, message, type });
@@ -533,14 +540,40 @@ function MainContent() {
   // Activity handlers
   const handleAddActivity = async (act: Activity) => {
     if (!activeTrip) return;
+
+    // Guarantee that every activity has GPS coordinates pinned precisely to the trip's destination
+    let finalAct = act;
+    try {
+      const destCenter = await resolveDestinationCoordinates(activeTrip.destination);
+      const isMissingOrWrongDest =
+        !act.latitude ||
+        !act.longitude ||
+        !areCoordinatesCloseToDestination(act.latitude, act.longitude, destCenter.latitude, destCenter.longitude);
+
+      if (isMissingOrWrongDest) {
+        const coords = await resolveLocationCoordinates(
+          act.location || act.title,
+          activeTrip.destination,
+          activities.length
+        );
+        finalAct = {
+          ...act,
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        };
+      }
+    } catch (err) {
+      console.warn('Coordinate resolution note:', err);
+    }
+
     // Optimistically update local state immediately so UI updates with zero delay
-    setActivities((prev) => [...prev.filter((a) => a.id !== act.id), act]);
+    setActivities((prev) => [...prev.filter((a) => a.id !== finalAct.id), finalAct]);
 
     if (isTripCreator) {
-      triggerToast('Activity Added', `"${act.title}" added to Day ${act.day}.`, 'itinerary');
+      triggerToast('Activity Scheduled', `"${finalAct.title}" added to Day ${finalAct.day} itinerary.`, 'itinerary');
       if (currentUser) {
         try {
-          await addActivity(activeTrip.id, act, activeTrip.title);
+          await addActivity(activeTrip.id, finalAct, activeTrip.title);
         } catch (err) {
           console.warn('Backend sync warning for activity:', err);
         }
@@ -551,16 +584,16 @@ function MainContent() {
         id: 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         tripId: activeTrip.id,
         type: 'activity',
-        title: `Itinerary: ${act.title} (Day ${act.day})`,
-        description: `Time: ${act.time} • Location: ${act.location} • Category: ${act.category}${act.costINR > 0 ? ` • Cost: ₹${act.costINR}` : ''}`,
-        data: act,
+        title: `Itinerary: ${finalAct.title} (Day ${finalAct.day})`,
+        description: `Time: ${finalAct.time} • Location: ${finalAct.location} • Category: ${finalAct.category}${finalAct.costINR > 0 ? ` • Cost: ₹${finalAct.costINR}` : ''}`,
+        data: finalAct,
         requestedByUid: currentUser?.uid || 'collaborator',
         requestedByName: userProfile?.displayName || currentUser?.displayName || 'Traveler Member',
         requestedAt: new Date().toISOString(),
         status: 'pending'
       };
       setChangeRequests((prev) => [req, ...prev.filter((r) => r.id !== req.id)]);
-      triggerToast('Proposal Submitted', `Activity proposal submitted for planner confirmation.`, 'approval');
+      triggerToast('Proposal Submitted', `Activity proposal submitted for trip planner confirmation.`, 'approval');
       if (currentUser) {
         try {
           await submitChangeRequest(activeTrip.id, req, activeTrip.title);
@@ -579,8 +612,19 @@ function MainContent() {
     location: string;
     costINR: number;
     notes?: string;
+    latitude?: number;
+    longitude?: number;
   }) => {
     if (!activeTrip) return;
+
+    let coords = { latitude: item.latitude, longitude: item.longitude };
+    if (!coords.latitude || !coords.longitude) {
+      try {
+        const resolved = await resolveLocationCoordinates(item.location || item.title, activeTrip.destination);
+        coords = { latitude: resolved.latitude, longitude: resolved.longitude };
+      } catch (e) {}
+    }
+
     const newAct: Activity = {
       id: 'act_' + Date.now(),
       tripId: activeTrip.id,
@@ -592,7 +636,9 @@ function MainContent() {
       costINR: item.costINR,
       notes: item.notes,
       createdBy: currentUser?.uid || 'guest',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      latitude: coords.latitude,
+      longitude: coords.longitude
     };
     await handleAddActivity(newAct);
   };
@@ -838,15 +884,15 @@ function MainContent() {
               exp.receivedBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()))
       ).length;
 
-  const tabs: { key: ActiveTab; label: string; icon: React.ReactNode; isProOnly?: boolean; count?: number }[] = [
-    { key: 'itinerary', label: 'Itinerary Schedule', icon: <Calendar className="w-4 h-4" />, count: activities.length },
-    { key: 'explore', label: 'Explore & Local Gems', icon: <Compass className="w-4 h-4" /> },
-    { key: 'expenses', label: 'Expenses & Split', icon: <CreditCard className="w-4 h-4" />, count: visibleExpensesCount },
-    { key: 'wallet', label: 'Passes & Wallet', icon: <Briefcase className="w-4 h-4" />, count: documents.length },
-    { key: 'packing', label: 'Packing Checklist', icon: <CheckSquare className="w-4 h-4" />, count: packingItems.length },
-    { key: 'journal', label: 'Trip Diary & Dossier', icon: <BookOpen className="w-4 h-4" /> },
-    { key: 'chat', label: 'Trip Group Room', icon: <MessageSquare className="w-4 h-4" />, count: messages.length },
-    { key: 'tools', label: 'Utilities & Medical SOS', icon: <Wrench className="w-4 h-4" /> }
+  const tabs: { key: ActiveTab; label: string; shortLabel: string; icon: React.ReactNode; isProOnly?: boolean; count?: number }[] = [
+    { key: 'home', label: 'Trip Overview', shortLabel: 'Home', icon: <Home className="w-4 h-4" /> },
+    { key: 'itinerary', label: 'Itinerary Schedule', shortLabel: 'Itinerary', icon: <Calendar className="w-4 h-4" />, count: activities.length },
+    { key: 'explore', label: 'Explore & Local Gems', shortLabel: 'Explore', icon: <Compass className="w-4 h-4" /> },
+    { key: 'expenses', label: 'Expenses & Split', shortLabel: 'Expenses', icon: <CreditCard className="w-4 h-4" />, count: visibleExpensesCount },
+    { key: 'wallet', label: 'Passes & Wallet', shortLabel: 'Wallet', icon: <Briefcase className="w-4 h-4" />, count: documents.length },
+    { key: 'packing', label: 'Packing Checklist', shortLabel: 'Packing', icon: <CheckSquare className="w-4 h-4" />, count: packingItems.length },
+    { key: 'journal', label: 'Trip Diary & Dossier', shortLabel: 'Diary', icon: <BookOpen className="w-4 h-4" /> },
+    { key: 'tools', label: 'Utilities & Medical SOS', shortLabel: 'Tools', icon: <Wrench className="w-4 h-4" /> }
   ];
 
   return (
@@ -889,7 +935,7 @@ function MainContent() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-6 pb-28 md:pb-8">
         {currentUser && trips.length === 0 && !tripsLoading && !activeTrip ? (
           /* Clean empty state for authenticated user who has not created or joined any trips yet */
           <div className="text-center py-20 px-4 bg-white dark:bg-slate-900/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto my-6">
@@ -915,23 +961,54 @@ function MainContent() {
         ) : activeTrip ? (
           <div>
             {/* Trip Hero with Cover Art, Budget & Progress */}
-            <TripHero
-              trip={activeTrip}
-              activities={activities}
-              expenses={expenses}
-              packingItems={packingItems}
-              isTripCreator={isTripPlanner}
-              pendingRequestsCount={pendingRequests.length}
-              onOpenApprovals={() => setApprovalsModalOpen(true)}
-              onUpdateStatus={handleUpdateStatus}
-              onUpdateTrip={handleUpdateTripDetails}
-              onDeleteTrip={handleOpenDeleteTripModal}
-              onRemoveTraveller={handleRemoveTraveller}
-              onOpenAiPlanner={() => setSuggestionsModalOpen(true)}
-            />
+            {/* On mobile: only displayed when activeTab === 'home'. On desktop: always visible at the top */}
+            <div className={activeTab === 'home' ? 'block' : 'hidden md:block'}>
+              <TripHero
+                trip={activeTrip}
+                activities={activities}
+                expenses={expenses}
+                packingItems={packingItems}
+                isTripCreator={isTripPlanner}
+                pendingRequestsCount={pendingRequests.length}
+                onOpenApprovals={() => setApprovalsModalOpen(true)}
+                onUpdateStatus={handleUpdateStatus}
+                onUpdateTrip={handleUpdateTripDetails}
+                onDeleteTrip={handleOpenDeleteTripModal}
+                onRemoveTraveller={handleRemoveTraveller}
+                onOpenAiPlanner={() => setSuggestionsModalOpen(true)}
+              />
+            </div>
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 scrollbar-none">
+            {/* In mobile view: show compact trip bar with Home button when browsing sub-tabs */}
+            {activeTab !== 'home' && (
+              <div className="md:hidden flex items-center justify-between py-2 px-3 mb-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('home')}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-sky-500/20 text-slate-700 dark:text-slate-300 hover:text-sky-500 font-bold text-xs flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    title="View Trip Home & Details"
+                  >
+                    <Home className="w-3.5 h-3.5 text-sky-500" />
+                    <span>Home</span>
+                  </button>
+                  <div className="min-w-0">
+                    <h2 className="text-xs font-black text-slate-900 dark:text-white truncate">
+                      {activeTrip.title}
+                    </h2>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {activeTrip.destination}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 shrink-0 capitalize">
+                  {activeTab}
+                </span>
+              </div>
+            )}
+
+            {/* Navigation Tabs (Desktop only: hidden on mobile to remove slider of tabs as requested) */}
+            <div className="hidden md:flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 scrollbar-none">
               {tabs.map((t) => {
                 const isActive = activeTab === t.key;
 
@@ -939,14 +1016,15 @@ function MainContent() {
                   <button
                     key={t.key}
                     onClick={() => setActiveTab(t.key)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                       isActive
                         ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
                     }`}
                   >
                     {t.icon}
-                    <span>{t.label}</span>
+                    <span className="hidden sm:inline">{t.label}</span>
+                    <span className="sm:hidden">{t.shortLabel}</span>
                     {typeof t.count === 'number' && (
                       <span
                         className={`text-[10px] px-1.5 py-0.2 rounded-full ${
@@ -965,6 +1043,83 @@ function MainContent() {
 
             {/* Active Tab Views */}
             <div className="space-y-6">
+              {activeTab === 'home' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4 text-sky-500" />
+                          <span>Itinerary Schedule</span>
+                        </span>
+                        <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                          {activities.length} activities
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                        {activities.length > 0
+                          ? `Next: ${activities[0].title}`
+                          : 'No activities scheduled yet.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('itinerary')}
+                        className="w-full py-2 px-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 font-bold text-xs hover:bg-sky-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>Open Itinerary</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <CreditCard className="w-4 h-4 text-emerald-500" />
+                          <span>Expenses & Ledger</span>
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          {visibleExpensesCount} entries
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                        Budget: ₹{activeTrip.budgetINR.toLocaleString('en-IN')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('expenses')}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>Open Expenses</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <Compass className="w-4 h-4 text-purple-500" />
+                          <span>Local Highlights</span>
+                        </span>
+                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
+                          Explore
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                        Discover top landmarks, restaurants, and cultural experiences.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('explore')}
+                        className="w-full py-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 font-bold text-xs hover:bg-purple-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>Explore Places</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'itinerary' && (
                 <ItineraryTab
                   trip={activeTrip}
@@ -1277,6 +1432,163 @@ function MainContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      {activeTrip && (
+        <nav
+          aria-label="Mobile Navigation"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 py-1 shadow-2xl transition-colors"
+        >
+          <div className="grid grid-cols-6 gap-0.5 max-w-lg mx-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'home'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Home className="w-4.5 h-4.5" />
+              <span className="text-[9px] mt-0.5 truncate">Home</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('itinerary')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'itinerary'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative">
+                <Calendar className="w-4.5 h-4.5" />
+                {activities.length > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 text-[8px] font-black rounded-full bg-sky-500 text-slate-950">
+                    {activities.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] mt-0.5 truncate">Itinerary</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('explore')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'explore'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Compass className="w-4.5 h-4.5" />
+              <span className="text-[9px] mt-0.5 truncate">Explore</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('expenses')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'expenses'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative">
+                <CreditCard className="w-4.5 h-4.5" />
+                {visibleExpensesCount > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 text-[8px] font-black rounded-full bg-emerald-500 text-slate-950">
+                    {visibleExpensesCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] mt-0.5 truncate">Expenses</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('wallet')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'wallet'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative">
+                <Briefcase className="w-4.5 h-4.5" />
+                {documents.length > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 text-[8px] font-black rounded-full bg-indigo-500 text-white">
+                    {documents.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] mt-0.5 truncate">Wallet</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('tools')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'tools'
+                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative">
+                <Wrench className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[9px] mt-0.5 truncate">Tools</span>
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* Floating Right-Side Corner Chat Section */}
+      {activeTrip && (
+        <aside
+          aria-label="Trip Group Chat Room"
+          className="fixed bottom-16 sm:bottom-20 md:bottom-6 right-3 sm:right-6 z-40 flex flex-col items-end"
+        >
+          {/* Floating Corner Chat Window */}
+          {chatCornerOpen && (
+            <div className="mb-3 w-[calc(100vw-1.5rem)] max-w-sm sm:w-96 h-[500px] max-h-[70vh] sm:max-h-[78vh] shadow-2xl rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 animate-in slide-in-from-bottom-4 duration-200 z-50 flex flex-col">
+              <ChatTab
+                trip={activeTrip}
+                messages={messages}
+                onSendMessage={handleSendMessage}
+                className="h-full border-0 shadow-none rounded-none"
+                onClose={() => setChatCornerOpen(false)}
+                isCornerWidget={true}
+              />
+            </div>
+          )}
+
+          {/* Floating Action Button in the Right Side Corner */}
+          <button
+            type="button"
+            onClick={() => setChatCornerOpen(!chatCornerOpen)}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-3 rounded-full shadow-2xl font-black text-xs transition-all cursor-pointer select-none active:scale-95 ${
+              chatCornerOpen
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 border border-slate-700'
+                : 'bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-sky-500/30 ring-2 ring-white/20'
+            }`}
+            title={chatCornerOpen ? 'Close Chat Room' : 'Open Trip Group Chat Room'}
+          >
+            <div className="relative flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
+              {messages.length > 0 && !chatCornerOpen && (
+                <span className="absolute -top-2 -right-2 px-1 min-w-[16px] h-4 text-[9px] font-black rounded-full bg-amber-400 text-slate-950 flex items-center justify-center animate-pulse">
+                  {messages.length}
+                </span>
+              )}
+            </div>
+            <span className="hidden sm:inline">
+              {chatCornerOpen ? 'Close Chat' : 'Trip Chat'}
+            </span>
+          </button>
+        </aside>
       )}
     </div>
   );

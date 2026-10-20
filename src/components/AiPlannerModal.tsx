@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, X, Loader2, Compass } from 'lucide-react';
 import { Activity, Trip } from '../types/travel.ts';
 import { useAuth } from '../context/AuthContext.tsx';
+import { resolveLocationCoordinates } from '../services/coordinateResolver.ts';
 
 interface AiPlannerModalProps {
   isOpen: boolean;
@@ -162,7 +163,18 @@ export const AiPlannerModal: React.FC<AiPlannerModalProps> = ({
         );
       }
 
-      await onAddActivities(generated);
+      const mappedWithPins = await Promise.all(
+        generated.map(async (act, idx) => {
+          const coords = await resolveLocationCoordinates(act.location || act.title, dest, idx);
+          return {
+            ...act,
+            latitude: coords.latitude,
+            longitude: coords.longitude
+          };
+        })
+      );
+
+      await onAddActivities(mappedWithPins);
       onClose();
     } catch (err) {
       console.error('Error generating AI itinerary:', err);

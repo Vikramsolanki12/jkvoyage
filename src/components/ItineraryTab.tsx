@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Clock,
   MapPin,
@@ -18,11 +18,13 @@ import {
   Check,
   ShieldCheck,
   AlertCircle,
-  X
+  X,
+  ExternalLink
 } from "lucide-react";
 import { Activity, ActivityCategory, Trip } from "../types/travel.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { detectNearbyPlaces, NearbyRecommendation } from "../services/nearbyRecommendations.ts";
+import { resolveLocationCoordinates, getGoogleMapsPinUrl } from "../services/coordinateResolver.ts";
 
 interface ItineraryTabProps {
   trip: Trip;
@@ -50,6 +52,8 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+
   // Form states
   const [day, setDay] = useState<number>(1);
   const [time, setTime] = useState("10:00");
@@ -61,6 +65,14 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
 
   // Nearby discovery panel state in timeline
   const [showNearbyForDay, setShowNearbyForDay] = useState<number | null>(null);
+
+  // Clear justAdded highlight after a few seconds
+  useEffect(() => {
+    if (justAddedId) {
+      const timer = setTimeout(() => setJustAddedId(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [justAddedId]);
 
   // Trip duration in days
   const tripDays = (() => {
@@ -124,6 +136,14 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
     setSubmitting(true);
 
     try {
+      // Automatically resolve GPS coordinates so it pins on the map
+      const locTarget = location.trim() || title.trim() || trip.destination;
+      const coords = await resolveLocationCoordinates(
+        locTarget,
+        trip.destination,
+        activities.length
+      );
+
       const newActivity: Activity = {
         id: "act_" + Date.now(),
         tripId: trip.id,
@@ -136,22 +156,26 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
         notes: notes.trim(),
         createdBy: currentUser?.uid || "user_local",
         createdAt: new Date().toISOString(),
+        latitude: coords.latitude,
+        longitude: coords.longitude
       };
 
       if (isTripCreator || !onProposeActivity) {
         await onAddActivity(newActivity);
-        setFeedback(`Added "${newActivity.title}" directly to itinerary!`);
+        setFeedback(`Added "${newActivity.title}" to Day ${newActivity.day}!`);
       } else {
         await onProposeActivity(newActivity);
-        setFeedback(`Proposed "${newActivity.title}" to Trip Planner for approval!`);
+        setFeedback(`Proposed "${newActivity.title}" to Trip Planner!`);
       }
+
+      setJustAddedId(newActivity.id);
 
       setModalOpen(false);
       setTitle("");
       setLocation("");
       setCostINR(0);
       setNotes("");
-      setTimeout(() => setFeedback(null), 3500);
+      setTimeout(() => setFeedback(null), 5000);
     } catch (err) {
       console.error("Failed to create activity:", err);
       setModalOpen(false);
@@ -198,10 +222,10 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
         </div>
       )}
 
-      {/* Filters Bar & Add Activity CTA */}
+      {/* View Switcher & Filters Bar */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-        {/* Day selection tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
+        {/* Left: Day selection tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto pb-1 md:pb-0">
           <button
             onClick={() => setSelectedDay("all")}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
@@ -227,14 +251,15 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
           ))}
         </div>
 
-        {/* Buttons */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+        {/* Right: View mode toggle & Action Buttons */}
+        {/* Right: Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
           <button
             onClick={onOpenSuggestions}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/30 transition-colors cursor-pointer"
           >
             <Compass className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Suggested Places & Dining</span>
+            <span className="hidden sm:inline">Suggested Places</span>
           </button>
 
           <button
@@ -248,156 +273,187 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
       </div>
 
       {/* Activity Timeline List */}
-      {filteredActivities.length === 0 ? (
-        <div className="text-center py-16 px-4 bg-white dark:bg-slate-900/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="w-14 h-14 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 flex items-center justify-center mx-auto mb-4 border border-sky-500/20">
-            <Calendar className="w-7 h-7" />
-          </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            No activities scheduled for this selection
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-6">
-            Explore curated place and restaurant suggestions for {trip.destination}, or add custom sightseeing stops.
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => setModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer"
-            >
-              Add First Activity
-            </button>
-            <button
-              onClick={onOpenSuggestions}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/30 transition-colors cursor-pointer"
-            >
-              Browse Place Suggestions
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredActivities.map((act) => {
-            const cat = categoryIcons[act.category] || categoryIcons.sightseeing;
-            return (
-              <div
-                key={act.id}
-                className="group p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-xs"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Left info */}
-                  <div className="flex items-start gap-3.5">
-                    <div className={`p-2.5 rounded-xl border shrink-0 ${cat.color}`}>
-                      {cat.icon}
-                    </div>
+          {filteredActivities.length === 0 ? (
+            <div className="text-center py-16 px-4 bg-white dark:bg-slate-900/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 flex items-center justify-center mx-auto mb-4 border border-sky-500/20">
+                <Calendar className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                No activities scheduled for this selection
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-6">
+                Explore curated place and restaurant suggestions for {trip.destination}, or add custom sightseeing stops to pin on your map.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setModalOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer"
+                >
+                  Add First Activity
+                </button>
+                <button
+                  onClick={onOpenSuggestions}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/30 transition-colors cursor-pointer"
+                >
+                  Browse Place Suggestions
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredActivities.map((act) => {
+                const cat = categoryIcons[act.category] || categoryIcons.sightseeing;
+                const isJustAdded = justAddedId === act.id;
 
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-black text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                          Day {act.day}
-                        </span>
-                        <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
-                          {act.time}
-                        </span>
-                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          {act.title}
-                        </h4>
-                      </div>
+                return (
+                  <div
+                    key={act.id}
+                    id={`activity-${act.id}`}
+                    className={`group p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900/60 border transition-all shadow-xs ${
+                      isJustAdded
+                        ? 'border-emerald-500/50 ring-2 ring-emerald-500/20 bg-emerald-50/15 dark:bg-emerald-950/10'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      {/* Left info */}
+                      <div className="flex items-start gap-3.5">
+                        <div className={`p-2.5 rounded-xl border shrink-0 ${cat.color}`}>
+                          {cat.icon}
+                        </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{act.location}</span>
-                        </span>
-                        {act.costINR > 0 && (
-                          <span className="flex items-center gap-0.5 font-bold text-emerald-600 dark:text-emerald-400">
-                            <IndianRupee className="w-3 h-3" />
-                            <span>{act.costINR.toLocaleString('en-IN')}</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {act.notes && (
-                        <p className="text-xs text-slate-600 dark:text-slate-400 pt-0.5">
-                          {act.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setShowNearbyForDay(showNearbyForDay === act.day ? null : act.day)}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1 transition-colors"
-                    >
-                      <Navigation className="w-3 h-3 text-sky-500" />
-                      <span>Nearby Spots</span>
-                    </button>
-
-                    {isTripCreator && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteActivity(act.id)}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                        title="Remove activity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Auto-detected nearby spots dropdown for this day */}
-                {showNearbyForDay === act.day && (
-                  <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 animate-in fade-in">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      <span className="flex items-center gap-1">
-                        <Navigation className="w-3.5 h-3.5 text-sky-500" />
-                        <span>Auto-Detected Places & Restaurants Nearby:</span>
-                      </span>
-                      <button
-                        onClick={() => setShowNearbyForDay(null)}
-                        className="text-slate-400 hover:text-slate-600 text-xs"
-                      >
-                        Close
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {detectNearbyPlaces(act.location, trip.destination).slice(0, 2).map((nb) => (
-                        <div
-                          key={nb.id}
-                          className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between gap-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-bold truncate text-slate-900 dark:text-white">{nb.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate">{nb.distance} • {nb.category}</p>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-black text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              Day {act.day}
+                            </span>
+                            <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                              {act.time}
+                            </span>
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                              {act.title}
+                            </h4>
+                            {isJustAdded && (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 animate-bounce">
+                                NEW ACTIVITY
+                              </span>
+                            )}
                           </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-sky-500" />
+                              <span className="font-medium text-slate-700 dark:text-slate-300">{act.location}</span>
+                            </span>
+                            {act.latitude && act.longitude && (
+                              <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 hidden sm:inline">
+                                ({act.latitude.toFixed(3)}, {act.longitude.toFixed(3)})
+                              </span>
+                            )}
+                            {act.costINR > 0 && (
+                              <span className="flex items-center gap-0.5 font-bold text-emerald-600 dark:text-emerald-400">
+                                <IndianRupee className="w-3 h-3" />
+                                <span>{act.costINR.toLocaleString('en-IN')}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {act.notes && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 pt-0.5">
+                              {act.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+
+                        <a
+                          href={getGoogleMapsPinUrl(act.location, {
+                            latitude: act.latitude || 0,
+                            longitude: act.longitude || 0
+                          })}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title="Open in Google Maps"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowNearbyForDay(showNearbyForDay === act.day ? null : act.day)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1 transition-colors"
+                        >
+                          <Navigation className="w-3 h-3 text-sky-500" />
+                          <span>Nearby</span>
+                        </button>
+
+                        {isTripCreator && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setTitle(nb.name);
-                              setLocation(nb.address || nb.name);
-                              setCategory(nb.type === 'restaurant' ? 'food' : 'sightseeing');
-                              setDay(act.day);
-                              setModalOpen(true);
-                              setShowNearbyForDay(null);
-                            }}
-                            className="px-2 py-0.5 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10px] font-bold shrink-0"
+                            onClick={() => onDeleteActivity(act.id)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                            title="Remove activity"
                           >
-                            + Schedule
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Auto-detected nearby spots dropdown for this day */}
+                    {showNearbyForDay === act.day && (
+                      <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 animate-in fade-in">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          <span className="flex items-center gap-1">
+                            <Navigation className="w-3.5 h-3.5 text-sky-500" />
+                            <span>Auto-Detected Places & Restaurants Nearby:</span>
+                          </span>
+                          <button
+                            onClick={() => setShowNearbyForDay(null)}
+                            className="text-slate-400 hover:text-slate-600 text-xs"
+                          >
+                            Close
                           </button>
                         </div>
-                      ))}
-                    </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {detectNearbyPlaces(act.location, trip.destination).slice(0, 2).map((nb) => (
+                            <div
+                              key={nb.id}
+                              className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-bold truncate text-slate-900 dark:text-white">{nb.name}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{nb.distance} • {nb.category}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTitle(nb.name);
+                                  setLocation(nb.address || nb.name);
+                                  setCategory(nb.type === 'restaurant' ? 'food' : 'sightseeing');
+                                  setDay(act.day);
+                                  setModalOpen(true);
+                                  setShowNearbyForDay(null);
+                                }}
+                                className="px-2 py-0.5 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10px] font-bold shrink-0"
+                              >
+                                + Schedule
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+            </div>
+          )}
 
       {/* Add / Propose Activity Modal */}
       {modalOpen && (
@@ -504,7 +560,7 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
               {/* Location Input with Auto-Detected Nearby Spots */}
               <div>
                 <label className="block text-xs font-semibold mb-1">
-                  Location / Destination
+                  Location / Destination *
                 </label>
                 <div className="relative">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -516,6 +572,17 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
                     placeholder={`e.g. Amber Fort, Johari Bazaar, ${trip.destination}`}
                     className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:border-sky-500"
                   />
+                </div>
+
+                {/* Map Pinning live status banner */}
+                <div className="mt-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-[11px] text-emerald-800 dark:text-emerald-300">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0 animate-pulse" />
+                    <span>Live GPS Pinning:</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate ml-2">
+                    Pins on map at: <strong>{location.trim() || trip.destination}</strong>
+                  </span>
                 </div>
 
                 {/* Auto-detected nearby places suggestions right inside form */}

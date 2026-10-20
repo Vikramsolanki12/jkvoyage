@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, MessageSquare, ShieldCheck, Crown, Users, Sparkles } from 'lucide-react';
+import { Send, MessageSquare, ShieldCheck, Crown, Users, Sparkles, X } from 'lucide-react';
 import { ChatMessage, Trip } from '../types/travel.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 
@@ -7,12 +7,18 @@ interface ChatTabProps {
   trip: Trip;
   messages: ChatMessage[];
   onSendMessage: (msg: ChatMessage) => Promise<void>;
+  className?: string;
+  onClose?: () => void;
+  isCornerWidget?: boolean;
 }
 
 export const ChatTab: React.FC<ChatTabProps> = ({
   trip,
   messages,
-  onSendMessage
+  onSendMessage,
+  className,
+  onClose,
+  isCornerWidget = false
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [text, setText] = useState('');
@@ -69,28 +75,40 @@ export const ChatTab: React.FC<ChatTabProps> = ({
   ];
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xl flex flex-col h-[580px] transition-colors">
+    <div className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xl flex flex-col transition-colors ${className || 'h-[580px]'}`}>
       {/* Chat Header */}
-      <div className="p-4 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-500 dark:text-sky-400 flex items-center justify-center">
+      <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-500 dark:text-sky-400 flex items-center justify-center shrink-0">
             <MessageSquare className="w-4 h-4" />
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <span>{trip.title} Trip Room</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="min-w-0">
+            <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+              <span className="truncate">{trip.title} Room</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             </h4>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-emerald-500" />
-              <span>Live companion channel</span>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-500 shrink-0" />
+              <span className="truncate">Live companion channel</span>
             </div>
           </div>
         </div>
 
-        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-          {messages.length} messages
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+            {messages.length} {messages.length === 1 ? 'msg' : 'msgs'}
+          </span>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Close chat popup"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages Scroll Area */}

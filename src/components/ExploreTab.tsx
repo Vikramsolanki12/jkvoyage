@@ -19,7 +19,6 @@ import {
 
 import { Trip, ActivityCategory, ExplorePlace, Activity } from "../types/travel.ts";
 import { resolvePlacePhoto, EXPLORE_PLACES, getGemsForDestination } from "../data/explorePlaces.ts";
-import { ExploreInteractiveMap } from "./ExploreInteractiveMap.tsx";
 
 import {
   searchNearbyPlaces,
@@ -42,6 +41,8 @@ interface ExploreTabProps {
     location: string;
     costINR: number;
     notes?: string;
+    latitude?: number;
+    longitude?: number;
   }) => Promise<void>;
 
   isPro: boolean;
@@ -485,18 +486,14 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
       await onAddActivity({
         day: selectedDay,
-
         time: "10:00 AM",
-
         title: place.title,
-
         category: actCategory,
-
         location: place.address,
-
         costINR: place.estCostINR,
-
         notes,
+        latitude: place.latitude,
+        longitude: place.longitude,
       });
 
       setAddedIds((prev) => ({
@@ -569,21 +566,10 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       </div>
 
       {/* =========================================
-          INTERACTIVE GOOGLE PLACES & SAVED ACTIVITIES MAP
-      ========================================== */}
-      <ExploreInteractiveMap
-        trip={trip}
-        activities={activities}
-        googlePlaces={places}
-        destinationCoordinates={destinationCoordinates}
-        onAddActivity={onAddActivity}
-      />
-
-      {/* =========================================
           FILTER + SEARCH
       ========================================== */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pb-1 md:pb-0">
           {CATEGORY_CONFIG.map((cat) => {
             const Icon = cat.icon;
 
@@ -608,7 +594,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           })}
         </div>
 
-        <div className="relative min-w-[240px]">
+        <div className="relative w-full md:w-auto md:min-w-[240px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
 
           <input

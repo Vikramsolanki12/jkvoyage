@@ -238,24 +238,24 @@ export const TripHero: React.FC<TripHeroProps> = ({
           HERO COVER - Crystal Clear High Definition
       ====================================================== */}
 
-      <div className="relative h-72 sm:h-84 md:h-96 w-full overflow-hidden bg-slate-950 group">
+      <div className="relative min-h-[360px] sm:min-h-[360px] md:h-96 w-full overflow-hidden bg-slate-950 group flex flex-col justify-between p-4 sm:p-6 pb-6">
         {/* Cover image */}
         <img
           src={heroImageUrl}
           alt={trip.destination}
-          className="h-full w-full object-cover opacity-95 transition-transform duration-700 group-hover:scale-102"
+          className="absolute inset-0 h-full w-full object-cover opacity-95 transition-transform duration-700 group-hover:scale-102"
         />
 
         {/* Crisp subtle overlay for text readability without obscuring clarity */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/45 to-black/30" />
 
         {/* =================================================
             TOP BADGES
         ================================================== */}
 
-        <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
           {/* Status + Dates */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-md ${
                 statusColors[trip.status]
@@ -264,9 +264,9 @@ export const TripHero: React.FC<TripHeroProps> = ({
               ● {trip.status}
             </span>
 
-            <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-white backdrop-blur-md sm:inline-flex">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-white backdrop-blur-md">
               <Calendar className="h-3.5 w-3.5 text-sky-400" />
-              {trip.startDate} → {trip.endDate}
+              <span className="truncate max-w-[200px] sm:max-w-none">{trip.startDate} → {trip.endDate}</span>
             </span>
           </div>
 
@@ -276,7 +276,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
             <button
               type="button"
               onClick={() => setShowPhotoModal(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-xs text-slate-200 backdrop-blur-md transition-colors hover:bg-slate-800"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-xs text-slate-200 backdrop-blur-md transition-colors hover:bg-slate-800 cursor-pointer"
               title="View full-resolution trip photo"
             >
               <Maximize2 className="h-3.5 w-3.5" />
@@ -291,7 +291,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
                   setCoverInputUrl(trip.coverImage || "");
                   setShowChangeCoverModal(true);
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-xs text-sky-300 backdrop-blur-md transition-colors hover:bg-slate-800"
+                className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-xs text-sky-300 backdrop-blur-md transition-colors hover:bg-slate-800 cursor-pointer"
                 title="Change cover photo (Trip Planner)"
               >
                 <Camera className="h-3.5 w-3.5" />
@@ -313,7 +313,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
                   setEditCover(trip.coverImage || "");
                   setEditModalOpen(true);
                 }}
-                className="rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-sky-400 backdrop-blur-md transition-colors hover:bg-slate-800"
+                className="rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-sky-400 backdrop-blur-md transition-colors hover:bg-slate-800 cursor-pointer"
                 title="Edit Trip Details (Trip Planner)"
               >
                 <Edit2 className="h-3.5 w-3.5" />
@@ -325,7 +325,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
               <button
                 type="button"
                 onClick={onDeleteTrip}
-                className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-rose-400 backdrop-blur-md transition-colors hover:bg-rose-500/20"
+                className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-rose-400 backdrop-blur-md transition-colors hover:bg-rose-500/20 cursor-pointer"
                 title="Delete trip (Trip Planner)"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -338,39 +338,38 @@ export const TripHero: React.FC<TripHeroProps> = ({
             HERO DETAILS
         ================================================== */}
 
-        <div className="absolute bottom-4 left-4 right-4 sm:left-6 sm:right-6">
+        <div className="relative z-10 mt-auto pt-6 flex flex-col gap-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             {/* Trip information */}
-            <div>
+            <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sky-400">
-                <MapPin className="h-3.5 w-3.5" />
-
-                <span>{trip.destination}</span>
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{trip.destination}</span>
               </div>
 
-              <h1 className="text-2xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-3xl lg:text-4xl">
+              <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-3xl lg:text-4xl break-words">
                 {trip.title}
               </h1>
 
               {trip.notes && (
-                <p className="mt-1 line-clamp-1 max-w-2xl text-xs text-slate-200 sm:text-sm">
+                <p className="mt-1 line-clamp-2 max-w-2xl text-xs text-slate-200 sm:text-sm">
                   {trip.notes}
                 </p>
               )}
             </div>
 
             {/* =================================================
-    HERO ACTIONS
-================================================== */}
+                HERO ACTIONS
+            ================================================== */}
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               {/* Creator vs Traveller Fixed Role Badge */}
               {isTripPlanner ? (
                 <div
                   className="flex items-center gap-1.5 rounded-xl border border-emerald-400/50 bg-emerald-500/25 px-3 py-2 text-xs font-black text-emerald-200 backdrop-blur-md shadow-sm"
                   title="Trip Planner (Creator of this journey - full planning rights)"
                 >
-                  <Crown className="h-3.5 w-3.5 text-amber-300" />
+                  <Crown className="h-3.5 w-3.5 text-amber-300 shrink-0" />
                   <span>👑 Trip Planner</span>
                 </div>
               ) : (
@@ -378,7 +377,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
                   className="flex items-center gap-1.5 rounded-xl border border-sky-400/40 bg-sky-500/20 px-3 py-2 text-xs font-bold text-sky-200 backdrop-blur-md shadow-sm"
                   title="Traveller (Joined member of this journey)"
                 >
-                  <Users className="h-3.5 w-3.5 text-sky-300" />
+                  <Users className="h-3.5 w-3.5 text-sky-300 shrink-0" />
                   <span>🎒 Traveller</span>
                 </div>
               )}
@@ -395,7 +394,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
                   }`}
                   title="Review collaborator change requests"
                 >
-                  <ShieldCheck className="h-4 w-4" />
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
                   <span>
                     {pendingRequestsCount > 0
                       ? `${pendingRequestsCount} Pending Approval${pendingRequestsCount > 1 ? 's' : ''}`
@@ -415,7 +414,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
                   className="flex items-center gap-2 rounded-xl border border-sky-400/50 bg-sky-500/30 px-3.5 py-2 text-xs font-black text-white backdrop-blur-md transition-all hover:scale-[1.02] hover:bg-sky-500/40 cursor-pointer shadow-md shadow-sky-500/20"
                   title="Trip Planner: Add traveller by email to automatically join this trip"
                 >
-                  <UserPlus className="h-4 w-4 text-sky-300" />
+                  <UserPlus className="h-4 w-4 text-sky-300 shrink-0" />
                   <span>+ Add Traveller</span>
                 </button>
               )}
@@ -424,9 +423,9 @@ export const TripHero: React.FC<TripHeroProps> = ({
               <button
                 type="button"
                 onClick={onOpenAiPlanner}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-400 px-4 py-2 text-xs font-black text-slate-950 shadow-lg shadow-sky-500/25 transition-all hover:scale-[1.02] hover:opacity-95 cursor-pointer"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-400 px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg shadow-sky-500/25 transition-all hover:scale-[1.02] hover:opacity-95 cursor-pointer"
               >
-                <Compass className="h-4 w-4 text-slate-950" />
+                <Compass className="h-4 w-4 text-slate-950 shrink-0" />
                 <span>Place Suggestions</span>
               </button>
             </div>
@@ -443,31 +442,29 @@ export const TripHero: React.FC<TripHeroProps> = ({
             SUMMARY CARDS
         ================================================== */}
 
-        <div className="grid grid-cols-2 gap-4 pb-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 pb-4 sm:grid-cols-4">
           {/* Trip Budget */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Trip Budget</span>
-
-              <IndianRupee className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+              <span className="truncate">Trip Budget</span>
+              <IndianRupee className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
             </div>
 
-            <div className="text-lg font-bold text-slate-900 dark:text-white sm:text-xl">
+            <div className="text-base sm:text-xl font-bold text-slate-900 dark:text-white truncate">
               ₹{trip.budgetINR.toLocaleString("en-IN")}
             </div>
 
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
               INR Allocated
             </div>
           </div>
 
           {/* Total Spent */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Total Spent</span>
-
+              <span className="truncate">Total Spent</span>
               <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                className={`rounded px-1.5 py-0.2 text-[10px] font-semibold shrink-0 ${
                   budgetPercent > 90
                     ? "bg-rose-500/20 text-rose-500 dark:text-rose-400"
                     : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
@@ -478,7 +475,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
             </div>
 
             <div
-              className={`text-lg font-bold sm:text-xl ${
+              className={`text-base sm:text-xl font-bold truncate ${
                 remainingBudget < 0
                   ? "text-rose-500 dark:text-rose-400"
                   : "text-slate-900 dark:text-slate-100"
@@ -487,7 +484,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
               ₹{totalSpent.toLocaleString("en-IN")}
             </div>
 
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {remainingBudget >= 0
                 ? `₹${remainingBudget.toLocaleString("en-IN")} left`
                 : `₹${Math.abs(remainingBudget).toLocaleString("en-IN")} over`}
@@ -495,42 +492,40 @@ export const TripHero: React.FC<TripHeroProps> = ({
           </div>
 
           {/* Itinerary */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Itinerary Items</span>
-
-              <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+              <span className="truncate">Itinerary</span>
+              <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
             </div>
 
-            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-300 sm:text-xl">
+            <div className="text-base sm:text-xl font-bold text-indigo-600 dark:text-indigo-300 truncate">
               {activities.length}{" "}
               <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                activities
+                stops
               </span>
             </div>
 
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
               Scheduled stops
             </div>
           </div>
 
           {/* Packing */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Packing Ready</span>
-
-              <FileCheck className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+              <span className="truncate">Packing</span>
+              <FileCheck className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
             </div>
 
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-300 sm:text-xl">
+            <div className="text-base sm:text-xl font-bold text-emerald-600 dark:text-emerald-300 truncate">
               {packingPercent}%{" "}
-              <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span className="text-[11px] sm:text-xs font-normal text-slate-500 dark:text-slate-400">
                 ({packedCount}/{packingItems.length})
               </span>
             </div>
 
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-              Luggage prep
+            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              Luggage ready
             </div>
           </div>
         </div>

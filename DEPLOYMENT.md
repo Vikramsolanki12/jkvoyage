@@ -79,6 +79,11 @@ npm run build
 npx wrangler pages deploy dist --project-name=jkvoyage
 ```
 
+### Cloudflare Troubleshooting ("No build associated with that uuid"):
+- **Cause**: Cloudflare Pages runner terminates early if it detects an incompatible `bun.lock` file with version 2 on Bun 1.2.15, resulting in `UnknownLockfileVersion: failed to parse lockfile: 'bun.lock'` and an orphaned/unassociated build UUID in the dashboard.
+- **Fix**: The repository uses `package-lock.json` and excludes `bun.lock` in `.gitignore`. Cloudflare Pages will automatically install dependencies using standard `npm ci` and run `npm run build` cleanly.
+- If you see any cached build failure in the Cloudflare dashboard, trigger **"Clear build cache and deploy"** or start a new deployment.
+
 ---
 
 ## 4. Deploying to Render

@@ -166,8 +166,18 @@ export const TripHero: React.FC<TripHeroProps> = ({
     if (clean === "you") return true;
     if (currentUser?.uid && nameOrUid === currentUser.uid) return true;
     if (currentUser?.email && clean === currentUser.email.trim().toLowerCase()) return true;
+    if (currentUser?.email && clean === currentUser.email.split('@')[0].toLowerCase()) return true;
     if (userProfile?.displayName && clean === userProfile.displayName.trim().toLowerCase()) return true;
     if (currentUser?.displayName && clean === currentUser.displayName.trim().toLowerCase()) return true;
+    if (Array.isArray(trip.collaborators)) {
+      const myCollab = trip.collaborators.find(
+        (c) => (currentUser?.email && c.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+               (currentUser?.uid && c.uid === currentUser.uid)
+      );
+      if (myCollab?.name && clean === myCollab.name.trim().toLowerCase()) return true;
+      if (myCollab?.email && clean === myCollab.email.trim().toLowerCase()) return true;
+      if (myCollab?.uid && nameOrUid === myCollab.uid) return true;
+    }
     return false;
   };
 
@@ -437,8 +447,8 @@ export const TripHero: React.FC<TripHeroProps> = ({
                 </div>
               )}
 
-              {/* Pending Approvals Review Button */}
-              {onOpenApprovals && (
+              {/* Pending Approvals Review Button (Trip Planner only) */}
+              {isTripPlanner && onOpenApprovals && (
                 <button
                   type="button"
                   onClick={onOpenApprovals}
@@ -690,17 +700,21 @@ export const TripHero: React.FC<TripHeroProps> = ({
               Trip Phase:
             </span>
 
-            <select
-              value={trip.status}
-              onChange={(e) => onUpdateStatus(e.target.value as TripStatus)}
-              className="rounded-xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <option value="planning">Planning (Drafting)</option>
-
-              <option value="ongoing">Ongoing (Active Journey)</option>
-
-              <option value="completed">Completed (Archived)</option>
-            </select>
+            {isTripPlanner ? (
+              <select
+                value={trip.status}
+                onChange={(e) => onUpdateStatus(e.target.value as TripStatus)}
+                className="rounded-xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                <option value="planning">Planning (Drafting)</option>
+                <option value="ongoing">Ongoing (Active Journey)</option>
+                <option value="completed">Completed (Archived)</option>
+              </select>
+            ) : (
+              <span className="rounded-xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 capitalize">
+                {trip.status}
+              </span>
+            )}
           </div>
         </div>
 

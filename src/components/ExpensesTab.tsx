@@ -122,7 +122,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const [showAddTraveler, setShowAddTraveler] = useState(false);
 
   // Helper to determine if a name string represents the current logged in user
-  const isMyTravelerName = React.useCallback((name: string): boolean => {
+  const isMyTravelerName = React.useCallback((name?: string): boolean => {
     if (!name) return false;
     const n = name.trim().toLowerCase();
     if (n === 'you') return true;
@@ -322,20 +322,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       return true;
     }
 
-    // 6. Official trip group expense paid by Trip Planner for all members
-    // (If another traveller logged an expense, it is their personal expense so other travellers do not see it!)
-    if (
-      exp.splitMode === 'all' &&
-      (isPlannerIdentifier(exp.paidBy) || isPlannerIdentifier(exp.paidByUid) || isPlannerIdentifier(exp.createdBy))
-    ) {
-      return true;
-    }
-
+    // Travellers ONLY see their own expenses, transactions, or direct splits — not overall group expenses!
     return false;
-  }, [currentUser, isMyTravelerName, isPlannerIdentifier]);
+  }, [currentUser, isMyTravelerName]);
 
   // For Trip Planner: Show all travellers' expenses! Can filter by individual traveller or view 'all'
-  // For Traveller: Strictly show ONLY their expenses and transactions, not for all of them!
+  // For Traveller: Strictly show ONLY their own expenses and transactions, not overall group expenses!
   const visibleExpenses = expenses.filter((exp) => {
     if (isTripPlanner) {
       if (plannerFilter === 'all') {
@@ -351,24 +343,47 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     return isMyOwnExpense(exp);
   });
 
+  // Calculate personal totals for Traveller:
+  const myPaidExpenses = expenses
+    .filter(
+      (e) =>
+        (!e.transactionType || e.transactionType === 'expense') &&
+        (isMyTravelerName(e.paidBy) || e.paidByUid === currentUser?.uid || e.createdBy === currentUser?.uid)
+    )
+    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+
+  const myPaymentsMade = expenses
+    .filter(
+      (e) =>
+        (e.transactionType === 'payment_received' || e.transactionType === 'deposit') &&
+        (isMyTravelerName(e.paidBy) || e.paidByUid === currentUser?.uid || e.createdBy === currentUser?.uid)
+    )
+    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+
+  const myPaymentsReceived = expenses
+    .filter(
+      (e) =>
+        e.transactionType === 'payment_received' &&
+        (isMyTravelerName(e.receivedBy) || e.receivedByUid === currentUser?.uid)
+    )
+    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+
+  const myTotalContribution = myPaidExpenses + myPaymentsMade;
+
   // Calculate totals:
   // For Trip Planner: total spent across visible expenses
-  // For Traveller: total spent paid by this traveller
+  // For Traveller: total spent paid strictly by this traveller
   const totalSpent = isTripPlanner
     ? visibleExpenses
         .filter((e) => !e.transactionType || e.transactionType === 'expense')
         .reduce((sum, e) => sum + (e.amountINR || 0), 0)
-    : visibleExpenses
-        .filter(
-          (e) =>
-            (!e.transactionType || e.transactionType === 'expense') &&
-            (isMyTravelerName(e.paidBy) || e.paidByUid === currentUser?.uid || e.createdBy === currentUser?.uid)
-        )
-        .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+    : myPaidExpenses;
 
-  const totalPaymentsReceived = visibleExpenses
-    .filter((e) => e.transactionType === 'payment_received' || e.transactionType === 'deposit')
-    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+  const totalPaymentsReceived = isTripPlanner
+    ? visibleExpenses
+        .filter((e) => e.transactionType === 'payment_received' || e.transactionType === 'deposit')
+        .reduce((sum, e) => sum + (e.amountINR || 0), 0)
+    : myPaymentsReceived;
 
   const budgetINR = trip.budgetINR || 1;
   const remainingBudget = budgetINR - totalSpent;
@@ -544,15 +559,22 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     memberBalances[t] = { paid: 0, owes: 0, received: 0 };
   });
 
+  const myCanonicalMember = activeTravelers.find(isMyTravelerName) || currentUserName;
+  if (!memberBalances[myCanonicalMember]) {
+    memberBalances[myCanonicalMember] = { paid: 0, owes: 0, received: 0 };
+  }
+
   visibleExpenses.forEach((exp) => {
-    const payer = exp.paidBy || currentUserName;
+    const rawPayer = exp.paidBy || currentUserName;
+    const payer = isMyTravelerName(rawPayer) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
     if (!memberBalances[payer]) {
       memberBalances[payer] = { paid: 0, owes: 0, received: 0 };
     }
 
     // Payment Received by traveller
     if (exp.transactionType === 'payment_received') {
-      const receiver = exp.receivedBy || currentUserName;
+      const rawReceiver = exp.receivedBy || currentUserName;
+      const receiver = isMyTravelerName(rawReceiver) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
       if (!memberBalances[receiver]) {
         memberBalances[receiver] = { paid: 0, owes: 0, received: 0 };
       }
@@ -572,22 +594,28 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     memberBalances[payer].paid += exp.amountINR;
 
     if (exp.splitMode === 'single' && exp.splitTargetUser) {
-      const debtor = exp.splitTargetUser;
+      const rawDebtor = exp.splitTargetUser;
+      const debtor = isMyTravelerName(rawDebtor) ? myCanonicalMember : rawDebtor;
       if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
       memberBalances[debtor].owes += exp.amountINR;
     } else if (exp.splitMode === 'custom' && exp.splitWithUsers && exp.splitWithUsers.length > 0) {
       const share = exp.amountINR / exp.splitWithUsers.length;
       exp.splitWithUsers.forEach((user) => {
-        if (!memberBalances[user]) memberBalances[user] = { paid: 0, owes: 0, received: 0 };
-        memberBalances[user].owes += share;
+        const debtor = isMyTravelerName(user) ? myCanonicalMember : user;
+        if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
+        memberBalances[debtor].owes += share;
       });
     } else {
-      // Default / 'all' - split across activeTravelers
-      const share = exp.amountINR / Math.max(1, activeTravelers.length);
-      activeTravelers.forEach((t) => {
-        if (!memberBalances[t]) memberBalances[t] = { paid: 0, owes: 0, received: 0 };
-        memberBalances[t].owes += share;
-      });
+      // Default / 'all' - for traveller, their own share
+      if (!isTripPlanner) {
+        memberBalances[myCanonicalMember].owes += exp.amountINR;
+      } else {
+        const share = exp.amountINR / Math.max(1, activeTravelers.length);
+        activeTravelers.forEach((t) => {
+          if (!memberBalances[t]) memberBalances[t] = { paid: 0, owes: 0, received: 0 };
+          memberBalances[t].owes += share;
+        });
+      }
     }
   });
 
@@ -766,22 +794,22 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           </div>
         </div>
 
-        {/* Payments Received / Inflow */}
+        {/* Card 2: Payments Received for Planner / My Total Contribution for Traveller */}
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-            <span>{isTripPlanner ? 'Payments Received (Inflow)' : 'Payments Received by Me'}</span>
-            <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+            <span>{isTripPlanner ? 'Payments Received (Inflow)' : 'My Total Contribution'}</span>
+            {isTripPlanner ? <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> : <HandCoins className="w-4 h-4 text-emerald-500" />}
           </div>
           <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center">
             <IndianRupee className="w-5 h-5 mr-1" />
-            {totalPaymentsReceived.toLocaleString('en-IN')}
+            {(isTripPlanner ? totalPaymentsReceived : myTotalContribution).toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isTripPlanner ? 'Traveler settlements & kitty added' : 'Transfers and settlements received'}
+            {isTripPlanner ? 'Traveler settlements & kitty added' : 'Paid expenses + transferred settlements'}
           </div>
         </div>
 
-        {/* Remaining Budget for Planner / Balance Status for Traveller */}
+        {/* Card 3: Remaining Budget for Planner / Balance Status for Traveller */}
         {isTripPlanner ? (
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
             <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
@@ -804,8 +832,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           </div>
         ) : (
           (() => {
-            const myKey = activeTravelers.find(isMyTravelerName) || currentUserName;
-            const b = memberBalances[myKey] || { paid: totalSpent, owes: totalSpent, received: totalPaymentsReceived };
+            const myKey = myCanonicalMember;
+            const b = memberBalances[myKey] || { paid: myPaidExpenses, owes: myPaidExpenses, received: myPaymentsReceived };
             const net = b.paid - b.owes - b.received;
             return (
               <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
@@ -1039,10 +1067,11 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {activeTravelers
-            .filter((member) => (isTripPlanner ? (plannerFilter === 'all' || member === plannerFilter) : isMyTravelerName(member)))
-            .map((member) => {
-              const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
+          {(isTripPlanner
+            ? activeTravelers.filter((member) => (plannerFilter === 'all' || member === plannerFilter))
+            : [myCanonicalMember]
+          ).map((member) => {
+              const b = memberBalances[member] || { paid: myPaidExpenses, owes: myPaidExpenses, received: myPaymentsReceived };
               const net = b.paid - b.owes - b.received;
               const isExtra = extraTravelers.includes(member);
               return (

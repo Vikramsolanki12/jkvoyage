@@ -126,7 +126,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
   // Form states
   const [title, setTitle] = useState('');
-  const [docType, setDocType] = useState<DocumentType>('ticket');
+  const [docType, setDocType] = useState<DocumentType>(isTripCreator ? 'ticket' : 'id_card');
   const [docNumber, setDocNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -178,6 +178,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    if (!isTripCreator && (docType === 'ticket' || docType === 'hotel_voucher')) {
+      setErrorMessage('Travellers are not allowed to add tickets or hotel bookings. These are managed exclusively by the Trip Planner.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -272,15 +278,15 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
       {/* Role Banner */}
       {!isTripCreator && (
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-800 dark:text-sky-300 text-xs flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-sky-500 shrink-0" />
             <span>
-              <strong>Collaborator Role:</strong> Any tickets or hotel bookings you add will be confirmed by the trip planner before appearing for all travelers.
+              <strong>Traveller Access:</strong> Official flight tickets, train passes, and hotel reservations are managed exclusively by the Trip Planner. You can view all confirmed travel tickets below, and upload your personal ID or passport.
             </span>
           </span>
-          <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] shrink-0">
-            APPROVAL REQUIRED
+          <span className="px-2 py-0.5 rounded-md bg-sky-500 text-slate-950 font-black text-[10px] shrink-0">
+            TRAVELLER
           </span>
         </div>
       )}
@@ -297,13 +303,37 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Ticket / Booking</span>
-        </button>
+        {isTripCreator ? (
+          <button
+            onClick={() => {
+              setDocType('ticket');
+              setModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Ticket / Booking</span>
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-700">
+              <Shield className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+              <span>Tickets & Bookings Managed by Planner</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setDocType('id_card');
+                setModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 text-slate-950 transition-all cursor-pointer shadow-sm"
+              title="Upload your personal government ID, passport, or visa"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Upload Personal ID / Doc</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Category Filter Pills */}
@@ -362,15 +392,33 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           <FileText className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
           <h4 className="text-sm font-bold text-slate-900 dark:text-white">No travel passes or bookings stored</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-5">
-            Upload your flight tickets, train PNR PDFs, hotel confirmation vouchers, and ID scans for instant access on the road.
+            {isTripCreator
+              ? 'Upload flight tickets, train PNR PDFs, hotel confirmation vouchers, and ID scans for instant access on the road.'
+              : 'Flight tickets, train passes, and hotel reservations will appear here once uploaded by the Trip Planner.'}
           </p>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add First Ticket / Booking
-          </button>
+          {isTripCreator ? (
+            <button
+              onClick={() => {
+                setDocType('ticket');
+                setModalOpen(true);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add First Ticket / Booking
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setDocType('id_card');
+                setModalOpen(true);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Upload Personal ID / Pass
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -498,16 +546,18 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl text-slate-900 dark:text-slate-100 max-h-[92vh] overflow-y-auto">
             <h3 className="text-base sm:text-lg font-black mb-1 flex items-center gap-2">
               <Plus className="w-5 h-5 text-sky-500" />
-              <span>{isTripCreator ? "Add Ticket, Booking or Pass" : "Propose Ticket or Booking"}</span>
+              <span>{isTripCreator ? "Add Ticket, Booking or Pass" : "Upload Personal ID or Travel Document"}</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Upload your flight tickets, train PNR PDFs, hotel confirmation slips, or insurance cards.
+              {isTripCreator
+                ? "Upload your flight tickets, train PNR PDFs, hotel confirmation slips, or insurance cards."
+                : "Upload your personal passport, national ID card, visa, or travel insurance policy."}
             </p>
 
             <form onSubmit={handleCreateDocument} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
-                  Document / Ticket Title *
+                  {isTripCreator ? "Document / Ticket Title *" : "Document / ID Title *"}
                 </label>
                 <input
                   type="text"
@@ -515,7 +565,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   maxLength={150}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Air India Flight Ticket, Hotel Taj Haveli Voucher"
+                  placeholder={isTripCreator ? "e.g. Air India Flight Ticket, Hotel Taj Haveli Voucher" : "e.g. My Passport, Aadhaar Card, Travel Insurance"}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -530,13 +580,25 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     onChange={(e) => setDocType(e.target.value as DocumentType)}
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-800 dark:text-slate-200"
                   >
-                    <option value="ticket">✈️ Flight / Train Ticket</option>
-                    <option value="hotel_voucher">🏨 Hotel Voucher</option>
-                    <option value="passport">🛂 Passport</option>
-                    <option value="visa">📄 Visa / Permit</option>
-                    <option value="insurance">🛡️ Travel Insurance</option>
-                    <option value="id_card">🪪 Aadhaar / National ID</option>
-                    <option value="other">📋 Other Document</option>
+                    {isTripCreator ? (
+                      <>
+                        <option value="ticket">✈️ Flight / Train Ticket</option>
+                        <option value="hotel_voucher">🏨 Hotel Voucher</option>
+                        <option value="passport">🛂 Passport</option>
+                        <option value="visa">📄 Visa / Permit</option>
+                        <option value="insurance">🛡️ Travel Insurance</option>
+                        <option value="id_card">🪪 Aadhaar / National ID</option>
+                        <option value="other">📋 Other Document</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="id_card">🪪 Aadhaar / National ID</option>
+                        <option value="passport">🛂 Passport</option>
+                        <option value="visa">📄 Visa / Permit</option>
+                        <option value="insurance">🛡️ Travel Insurance</option>
+                        <option value="other">📋 Other Personal Document</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

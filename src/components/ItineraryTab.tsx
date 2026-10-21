@@ -209,15 +209,15 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
 
       {/* Role Banner */}
       {!isTripCreator && (
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+        <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-800 dark:text-sky-300 text-xs flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-sky-500 shrink-0" />
             <span>
-              <strong>Collaborator Role:</strong> Any added activity, ticket, or expense requires confirmation by the trip planner before it appears permanently on the itinerary.
+              <strong>Traveller Access:</strong> Official bookings and activities are managed by the Trip Planner. Suggested places will be confirmed before appearing on the final itinerary.
             </span>
           </span>
-          <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] shrink-0">
-            CONFIRMATION REQUIRED
+          <span className="px-2 py-0.5 rounded-md bg-sky-500 text-slate-950 font-black text-[10px] shrink-0">
+            TRAVELLER
           </span>
         </div>
       )}

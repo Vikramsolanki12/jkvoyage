@@ -867,33 +867,45 @@ function MainContent() {
     );
   }
 
+  const myTravellerCollab = activeTrip && Array.isArray(activeTrip.collaborators)
+    ? activeTrip.collaborators.find(
+        (c) => (currentUser?.email && c.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+               (currentUser?.uid && c.uid === currentUser.uid)
+      )
+    : null;
+
+  const isMyTravellerIdentity = React.useCallback((ident?: string): boolean => {
+    if (!ident) return false;
+    const clean = ident.trim().toLowerCase();
+    if (clean === 'you') return true;
+    if (currentUser?.uid && ident === currentUser.uid) return true;
+    if (currentUser?.email && clean === currentUser.email.trim().toLowerCase()) return true;
+    if (currentUser?.email && clean === currentUser.email.split('@')[0].toLowerCase()) return true;
+    if (userProfile?.displayName && clean === userProfile.displayName.trim().toLowerCase()) return true;
+    if (currentUser?.displayName && clean === currentUser.displayName.trim().toLowerCase()) return true;
+    if (myTravellerCollab?.name && clean === myTravellerCollab.name.trim().toLowerCase()) return true;
+    if (myTravellerCollab?.email && clean === myTravellerCollab.email.trim().toLowerCase()) return true;
+    return false;
+  }, [currentUser, userProfile, myTravellerCollab]);
+
   const visibleExpensesCount = isTripPlanner
     ? expenses.length
     : expenses.filter(
         (exp) =>
-          exp.paidByUid === currentUser?.uid ||
-          exp.createdBy === currentUser?.uid ||
-          exp.receivedByUid === currentUser?.uid ||
-          exp.paidBy === 'You' ||
-          exp.receivedBy === 'You' ||
-          (userProfile?.displayName &&
-            (exp.paidBy?.trim().toLowerCase() === userProfile.displayName.trim().toLowerCase() ||
-              exp.receivedBy?.trim().toLowerCase() === userProfile.displayName.trim().toLowerCase())) ||
-          (currentUser?.email &&
-            (exp.paidBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase() ||
-              exp.receivedBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()))
+          isMyTravellerIdentity(exp.paidBy) ||
+          isMyTravellerIdentity(exp.paidByUid) ||
+          isMyTravellerIdentity(exp.createdBy) ||
+          isMyTravellerIdentity(exp.receivedBy) ||
+          isMyTravellerIdentity(exp.receivedByUid) ||
+          (exp.splitMode === 'single' && isMyTravellerIdentity(exp.splitTargetUser)) ||
+          (exp.splitMode === 'custom' && Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some(isMyTravellerIdentity))
       ).length;
+
   const myTravellerContribution = expenses
     .filter(
       (exp) =>
-        (!exp.transactionType || exp.transactionType === 'expense' || exp.transactionType === 'deposit') &&
-        (exp.paidByUid === currentUser?.uid ||
-          exp.createdBy === currentUser?.uid ||
-          exp.paidBy === 'You' ||
-          (userProfile?.displayName &&
-            exp.paidBy?.trim().toLowerCase() === userProfile.displayName.trim().toLowerCase()) ||
-          (currentUser?.email &&
-            exp.paidBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()))
+        (!exp.transactionType || exp.transactionType === 'expense' || exp.transactionType === 'deposit' || exp.transactionType === 'payment_received') &&
+        (isMyTravellerIdentity(exp.paidBy) || isMyTravellerIdentity(exp.paidByUid) || isMyTravellerIdentity(exp.createdBy))
     )
     .reduce((sum, e) => sum + (e.amountINR || 0), 0);
 
@@ -1089,14 +1101,16 @@ function MainContent() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <CreditCard className="w-4 h-4 text-emerald-500" />
-                          <span>Expenses & Ledger</span>
+                          <span>{isTripPlanner ? "Expenses & Ledger" : "My Contribution & Expenses"}</span>
                         </span>
                         <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                           {visibleExpensesCount} entries
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                        Budget: ₹{activeTrip.budgetINR.toLocaleString('en-IN')}
+                        {isTripPlanner
+                          ? `Budget: ₹${activeTrip.budgetINR.toLocaleString('en-IN')}`
+                          : `My Contribution: ₹${myTravellerContribution.toLocaleString('en-IN')}`}
                       </p>
                       <button
                         type="button"

@@ -1344,13 +1344,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                     >
                       <IndianRupee className="w-4 h-4 mr-0.5" />
                       <span>
-                        {(isTripPlanner
-                          ? exp.amountINR
-                          : (!isPaymentReceived && !isDeposit
-                              ? getTravellerShare(exp)
-                              : exp.amountINR)
-                        ).toLocaleString('en-IN')}
-                      </span>
+  {(isTripPlanner
+    ? exp.amountINR
+    : (!isPaymentReceived && !isDeposit
+        ? getTravellerShare(exp)
+        : exp.amountINR)
+  ).toLocaleString('en-IN')}
+</span>
                     </div>
                     {!isTripPlanner && !isPaymentReceived && !isDeposit && (
   <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">

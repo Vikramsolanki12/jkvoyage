@@ -285,31 +285,76 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 
   // Helper to determine the traveller's individual share of an expense:
   // (e.g. 1000 INR split across 5 travellers = strictly 200 INR for this traveller)
-  const getTravellerShare = React.useCallback((exp: Expense): number => {
-    if (exp.transactionType === 'payment_received' || exp.transactionType === 'deposit') {
+  
+const getTravellerShare = React.useCallback(
+  (exp: Expense): number => {
+    // Payments and deposits: show the full amount
+    if (
+      exp.transactionType === 'payment_received' ||
+      exp.transactionType === 'deposit'
+    ) {
       return exp.amountINR;
     }
-    // 1. Explicit splits array
+
+    // 1. Explicit per-traveller splits
+    
+    // 1. Explicit per-traveller splits
     if (Array.isArray(exp.splits) && exp.splits.length > 0) {
-      const mySplit = exp.splits.find((s) => isMyTravelerName(s.userName));
-      if (mySplit) return Math.round(mySplit.amount);
-    }
-    // 2. Single target user
-    if (exp.splitMode === 'single') {
-      return isMyTravelerName(exp.splitTargetUser) ? exp.amountINR : 0;
-    }
-    // 3. Custom selected users
-    if (exp.splitMode === 'custom' && Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
-      if (exp.splitWithUsers.some((u) => isMyTravelerName(u))) {
-        return Math.round(exp.amountINR / exp.splitWithUsers.length);
+      const mySplit = exp.splits.find((s) =>
+        isMyTravelerName(s.userName)
+      );
+
+      if (mySplit) {
+        return Math.round(mySplit.amount);
       }
+
+      // Fallback: use selected travellers if names don't match
+      if (
+        (exp.splitMode === 'custom' ||
+          !exp.splitMode ||
+          exp.splitMode === 'all') &&
+        Array.isArray(exp.splitWithUsers) &&
+        exp.splitWithUsers.some((u) => isMyTravelerName(u))
+      ) {
+        return Math.round(
+          exp.amountINR / exp.splitWithUsers.length
+        );
+      }
+
       return 0;
     }
-    // 4. Split across all travellers (splitMode === 'all' or default):
-    // e.g. 5 travellers, 1000 INR -> strictly 200 INR
+
+
+    // 2. Single traveller
+    if (exp.splitMode === 'single') {
+      return isMyTravelerName(exp.splitTargetUser)
+        ? exp.amountINR
+        : 0;
+    }
+
+    // 3. Custom split among selected travellers
+    if (
+      exp.splitMode === 'custom' &&
+      Array.isArray(exp.splitWithUsers) &&
+      exp.splitWithUsers.length > 0
+    ) {
+      const isIncluded = exp.splitWithUsers.some((user) =>
+        isMyTravelerName(user)
+      );
+
+      return isIncluded
+        ? Math.round(exp.amountINR / exp.splitWithUsers.length)
+        : 0;
+    }
+
+    // 4. Split among all travellers
     const totalMembers = Math.max(1, activeTravelers.length);
+
     return Math.round(exp.amountINR / totalMembers);
-  }, [activeTravelers, isMyTravelerName]);
+  },
+  [activeTravelers, isMyTravelerName]
+);
+
 
   // Helper to determine if an expense is relevant to the current traveller
   const isMyOwnExpense = React.useCallback((exp: Expense): boolean => {

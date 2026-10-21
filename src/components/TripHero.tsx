@@ -527,16 +527,16 @@ export const TripHero: React.FC<TripHeroProps> = ({
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
               <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                <span className="truncate">My Contribution</span>
+                <span className="truncate">My Expenses Share</span>
                 <HandCoins className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
               </div>
 
               <div className="text-base sm:text-xl font-bold text-slate-900 dark:text-white truncate">
-                ₹{myTotalContribution.toLocaleString("en-IN")}
+                ₹{Math.round(myOwedShare).toLocaleString("en-IN")}
               </div>
 
               <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                Paid by you
+                {myTotalContribution > 0 ? `Paid: ₹${myTotalContribution.toLocaleString("en-IN")}` : "Your allocated share"}
               </div>
             </div>
           )}
@@ -682,14 +682,14 @@ export const TripHero: React.FC<TripHeroProps> = ({
               <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                 <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                   <HandCoins className="w-4 h-4 text-sky-500" />
-                  <span>My Contribution Status</span>
+                  <span>My Expenses & Contribution</span>
                 </span>
                 <span className="font-extrabold text-sky-600 dark:text-sky-400">
-                  ₹{myTotalContribution.toLocaleString("en-IN")} contributed
+                  ₹{Math.round(myOwedShare).toLocaleString("en-IN")} allocated share
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Showing your individual contribution & settlement balance. Overall group expenses are private to the Trip Planner.
+                Paid: ₹{myTotalContribution.toLocaleString("en-IN")} • Showing strictly your individual expenses and settlement balance.
               </p>
             </div>
           )}

@@ -283,51 +283,56 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     return false;
   }, [trip]);
 
-  // Helper to determine if an expense is the current traveller's own expense or transaction
+  // Helper to determine the traveller's individual share of an expense:
+  // (e.g. 1000 INR split across 5 travellers = strictly 200 INR for this traveller)
+  const getTravellerShare = React.useCallback((exp: Expense): number => {
+    if (exp.transactionType === 'payment_received' || exp.transactionType === 'deposit') {
+      return exp.amountINR;
+    }
+    // 1. Explicit splits array
+    if (Array.isArray(exp.splits) && exp.splits.length > 0) {
+      const mySplit = exp.splits.find((s) => isMyTravelerName(s.userName));
+      if (mySplit) return Math.round(mySplit.amount);
+    }
+    // 2. Single target user
+    if (exp.splitMode === 'single') {
+      return isMyTravelerName(exp.splitTargetUser) ? exp.amountINR : 0;
+    }
+    // 3. Custom selected users
+    if (exp.splitMode === 'custom' && Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
+      if (exp.splitWithUsers.some((u) => isMyTravelerName(u))) {
+        return Math.round(exp.amountINR / exp.splitWithUsers.length);
+      }
+      return 0;
+    }
+    // 4. Split across all travellers (splitMode === 'all' or default):
+    // e.g. 5 travellers, 1000 INR -> strictly 200 INR
+    const totalMembers = Math.max(1, activeTravelers.length);
+    return Math.round(exp.amountINR / totalMembers);
+  }, [activeTravelers, isMyTravelerName]);
+
+  // Helper to determine if an expense is relevant to the current traveller
   const isMyOwnExpense = React.useCallback((exp: Expense): boolean => {
-    // 1. Paid by this traveller
-    if (currentUser?.uid && (exp.paidByUid === currentUser.uid || exp.createdBy === currentUser.uid)) {
-      return true;
+    if (exp.transactionType === 'payment_received' || exp.transactionType === 'deposit') {
+      return (
+        isMyTravelerName(exp.paidBy) ||
+        isMyTravelerName(exp.receivedBy) ||
+        exp.paidByUid === currentUser?.uid ||
+        exp.receivedByUid === currentUser?.uid ||
+        exp.createdBy === currentUser?.uid
+      );
     }
-    if (currentUser?.email && exp.paidBy && exp.paidBy.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) {
-      return true;
-    }
-    if (isMyTravelerName(exp.paidBy)) {
-      return true;
-    }
-
-    // 2. Received by this traveller (payment received)
-    if (currentUser?.uid && exp.receivedByUid === currentUser.uid) {
-      return true;
-    }
-    if (currentUser?.email && exp.receivedBy && exp.receivedBy.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) {
-      return true;
-    }
-    if (exp.receivedBy && isMyTravelerName(exp.receivedBy)) {
-      return true;
-    }
-
-    // 3. Specifically allocated to this traveller (single split)
-    if (exp.splitMode === 'single' && exp.splitTargetUser && isMyTravelerName(exp.splitTargetUser)) {
-      return true;
-    }
-
-    // 4. Custom split where this traveller is selected
-    if (exp.splitMode === 'custom' && Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => isMyTravelerName(u))) {
-      return true;
-    }
-
-    // 5. Explicit split array containing this traveller
-    if (Array.isArray(exp.splits) && exp.splits.some((s) => isMyTravelerName(s.userName))) {
-      return true;
-    }
-
-    // Travellers ONLY see their own expenses, transactions, or direct splits — not overall group expenses!
-    return false;
-  }, [currentUser, isMyTravelerName]);
+    // Expense is relevant if traveller has a share in it or paid it
+    return (
+      getTravellerShare(exp) > 0 ||
+      isMyTravelerName(exp.paidBy) ||
+      exp.paidByUid === currentUser?.uid ||
+      exp.createdBy === currentUser?.uid
+    );
+  }, [currentUser, isMyTravelerName, getTravellerShare]);
 
   // For Trip Planner: Show all travellers' expenses! Can filter by individual traveller or view 'all'
-  // For Traveller: Strictly show ONLY their own expenses and transactions, not overall group expenses!
+  // For Traveller: Strictly show ONLY their own expenses and transactions
   const visibleExpenses = expenses.filter((exp) => {
     if (isTripPlanner) {
       if (plannerFilter === 'all') {
@@ -370,14 +375,19 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 
   const myTotalContribution = myPaidExpenses + myPaymentsMade;
 
+  // For Traveller: Sum strictly their own expense shares across visible expenses (e.g. 200 INR of 1000 INR)
+  const myTotalExpenseShare = visibleExpenses
+    .filter((e) => !e.transactionType || e.transactionType === 'expense')
+    .reduce((sum, e) => sum + getTravellerShare(e), 0);
+
   // Calculate totals:
-  // For Trip Planner: total spent across visible expenses
-  // For Traveller: total spent paid strictly by this traveller
+  // For Trip Planner: total spent across all group expenses
+  // For Traveller: strictly their personal share of expenses
   const totalSpent = isTripPlanner
     ? visibleExpenses
         .filter((e) => !e.transactionType || e.transactionType === 'expense')
         .reduce((sum, e) => sum + (e.amountINR || 0), 0)
-    : myPaidExpenses;
+    : myTotalExpenseShare;
 
   const totalPaymentsReceived = isTripPlanner
     ? visibleExpenses
@@ -388,11 +398,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const budgetINR = trip.budgetINR || 1;
   const remainingBudget = budgetINR - totalSpent;
 
-  // Category aggregations for expenses
+  // Category aggregations for expenses: strictly traveller's share for non-planners
   const categoryTotals = visibleExpenses
     .filter((e) => !e.transactionType || e.transactionType === 'expense')
     .reduce((acc, exp) => {
-      acc[exp.category] = (acc[exp.category] || 0) + exp.amountINR;
+      const amt = isTripPlanner ? exp.amountINR : getTravellerShare(exp);
+      acc[exp.category] = (acc[exp.category] || 0) + amt;
       return acc;
     }, {} as Record<ExpenseCategory, number>);
 
@@ -564,51 +575,48 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     memberBalances[myCanonicalMember] = { paid: 0, owes: 0, received: 0 };
   }
 
-  visibleExpenses.forEach((exp) => {
-    const rawPayer = exp.paidBy || currentUserName;
-    const payer = isMyTravelerName(rawPayer) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
-    if (!memberBalances[payer]) {
-      memberBalances[payer] = { paid: 0, owes: 0, received: 0 };
-    }
-
-    // Payment Received by traveller
-    if (exp.transactionType === 'payment_received') {
-      const rawReceiver = exp.receivedBy || currentUserName;
-      const receiver = isMyTravelerName(rawReceiver) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
-      if (!memberBalances[receiver]) {
-        memberBalances[receiver] = { paid: 0, owes: 0, received: 0 };
+  if (isTripPlanner) {
+    visibleExpenses.forEach((exp) => {
+      const rawPayer = exp.paidBy || currentUserName;
+      const payer = isMyTravelerName(rawPayer) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
+      if (!memberBalances[payer]) {
+        memberBalances[payer] = { paid: 0, owes: 0, received: 0 };
       }
-      // Payer transferred money to receiver (settlement)
+
+      // Payment Received by traveller
+      if (exp.transactionType === 'payment_received') {
+        const rawReceiver = exp.receivedBy || currentUserName;
+        const receiver = isMyTravelerName(rawReceiver) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
+        if (!memberBalances[receiver]) {
+          memberBalances[receiver] = { paid: 0, owes: 0, received: 0 };
+        }
+        // Payer transferred money to receiver (settlement)
+        memberBalances[payer].paid += exp.amountINR;
+        memberBalances[receiver].received += exp.amountINR;
+        return;
+      }
+
+      // Deposit added to group pool
+      if (exp.transactionType === 'deposit') {
+        memberBalances[payer].paid += exp.amountINR;
+        return;
+      }
+
+      // Regular expense
       memberBalances[payer].paid += exp.amountINR;
-      memberBalances[receiver].received += exp.amountINR;
-      return;
-    }
 
-    // Deposit added to group pool
-    if (exp.transactionType === 'deposit') {
-      memberBalances[payer].paid += exp.amountINR;
-      return;
-    }
-
-    // Regular expense
-    memberBalances[payer].paid += exp.amountINR;
-
-    if (exp.splitMode === 'single' && exp.splitTargetUser) {
-      const rawDebtor = exp.splitTargetUser;
-      const debtor = isMyTravelerName(rawDebtor) ? myCanonicalMember : rawDebtor;
-      if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
-      memberBalances[debtor].owes += exp.amountINR;
-    } else if (exp.splitMode === 'custom' && exp.splitWithUsers && exp.splitWithUsers.length > 0) {
-      const share = exp.amountINR / exp.splitWithUsers.length;
-      exp.splitWithUsers.forEach((user) => {
-        const debtor = isMyTravelerName(user) ? myCanonicalMember : user;
+      if (exp.splitMode === 'single' && exp.splitTargetUser) {
+        const rawDebtor = exp.splitTargetUser;
+        const debtor = isMyTravelerName(rawDebtor) ? myCanonicalMember : rawDebtor;
         if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
-        memberBalances[debtor].owes += share;
-      });
-    } else {
-      // Default / 'all' - for traveller, their own share
-      if (!isTripPlanner) {
-        memberBalances[myCanonicalMember].owes += exp.amountINR;
+        memberBalances[debtor].owes += exp.amountINR;
+      } else if (exp.splitMode === 'custom' && exp.splitWithUsers && exp.splitWithUsers.length > 0) {
+        const share = exp.amountINR / exp.splitWithUsers.length;
+        exp.splitWithUsers.forEach((user) => {
+          const debtor = isMyTravelerName(user) ? myCanonicalMember : user;
+          if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
+          memberBalances[debtor].owes += share;
+        });
       } else {
         const share = exp.amountINR / Math.max(1, activeTravelers.length);
         activeTravelers.forEach((t) => {
@@ -616,8 +624,43 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           memberBalances[t].owes += share;
         });
       }
-    }
-  });
+    });
+  } else {
+    // For Traveller: Strictly calculate only their own individual paid amounts and their allocated expense share
+    // (e.g. 1000 INR expense distributed across 5 travellers = strictly 200 INR owed share)
+    visibleExpenses.forEach((exp) => {
+      const rawPayer = exp.paidBy || currentUserName;
+      const isPayerMe = isMyTravelerName(rawPayer) || exp.paidByUid === currentUser?.uid || exp.createdBy === currentUser?.uid;
+
+      if (exp.transactionType === 'payment_received') {
+        const rawReceiver = exp.receivedBy || currentUserName;
+        const isReceiverMe = isMyTravelerName(rawReceiver) || exp.receivedByUid === currentUser?.uid;
+        if (isPayerMe) {
+          memberBalances[myCanonicalMember].paid += exp.amountINR;
+        }
+        if (isReceiverMe) {
+          memberBalances[myCanonicalMember].received += exp.amountINR;
+        }
+        return;
+      }
+
+      if (exp.transactionType === 'deposit') {
+        if (isPayerMe) {
+          memberBalances[myCanonicalMember].paid += exp.amountINR;
+        }
+        return;
+      }
+
+      // Regular expense:
+      if (isPayerMe) {
+        memberBalances[myCanonicalMember].paid += exp.amountINR;
+      }
+
+      // The traveller's allocated share of this expense (e.g. 200 INR of 1000 INR across 5 travellers)
+      const myShare = getTravellerShare(exp);
+      memberBalances[myCanonicalMember].owes += myShare;
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // RECHARTS DATA PREPARATION:
@@ -640,7 +683,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       if (!dailySpendingMap[d]) {
         dailySpendingMap[d] = { date: d, amount: 0, count: 0 };
       }
-      dailySpendingMap[d].amount += exp.amountINR;
+      dailySpendingMap[d].amount += isTripPlanner ? exp.amountINR : getTravellerShare(exp);
       dailySpendingMap[d].count += 1;
     });
 
@@ -773,7 +816,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 
       {/* Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Total Spent */}
+        {/* Total Spent / Expense Share */}
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs relative overflow-hidden transition-colors">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
             <span>
@@ -781,7 +824,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 ? plannerFilter === 'all'
                   ? 'Total Expenses (All Travellers)'
                   : `Expenses (${plannerFilter})`
-                : 'My Total Expenses (Paid by Me)'}
+                : 'My Expense Share'}
             </span>
             <Receipt className="w-4 h-4 text-sky-500" />
           </div>
@@ -790,14 +833,16 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             {totalSpent.toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isTripPlanner ? `Trip Budget: ₹${trip.budgetINR.toLocaleString('en-IN')}` : `${visibleExpenses.filter(e => !e.transactionType || e.transactionType === 'expense').length} expense receipts logged`}
+            {isTripPlanner
+              ? `Trip Budget: ₹${trip.budgetINR.toLocaleString('en-IN')}`
+              : `Your individual share across ${visibleExpenses.filter(e => !e.transactionType || e.transactionType === 'expense').length} expenses`}
           </div>
         </div>
 
-        {/* Card 2: Payments Received for Planner / My Total Contribution for Traveller */}
+        {/* Card 2: Payments Received for Planner / My Paid Contribution for Traveller */}
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-            <span>{isTripPlanner ? 'Payments Received (Inflow)' : 'My Total Contribution'}</span>
+            <span>{isTripPlanner ? 'Payments Received (Inflow)' : 'My Paid Contribution'}</span>
             {isTripPlanner ? <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> : <HandCoins className="w-4 h-4 text-emerald-500" />}
           </div>
           <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center">
@@ -805,7 +850,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             {(isTripPlanner ? totalPaymentsReceived : myTotalContribution).toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isTripPlanner ? 'Traveler settlements & kitty added' : 'Paid expenses + transferred settlements'}
+            {isTripPlanner ? 'Traveler settlements & kitty added' : 'Expenses paid by you + settlements transferred'}
           </div>
         </div>
 
@@ -1298,14 +1343,28 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       }`}
                     >
                       <IndianRupee className="w-4 h-4 mr-0.5" />
-                      <span>{exp.amountINR.toLocaleString('en-IN')}</span>
+                      <span>
+                        {(isTripPlanner
+                          ? exp.amountINR
+                          : (!isPaymentReceived && !isDeposit
+                              ? getTravellerShare(exp)
+                              : exp.amountINR)
+                        ).toLocaleString('en-IN')}
+                      </span>
                     </div>
-                    {!isPaymentReceived && !isDeposit && exp.splitMode === 'custom' && exp.splitWithUsers && (
+                    {!isTripPlanner && !isPaymentReceived && !isDeposit && (
+                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">
+                        {getTravellerShare(exp) !== exp.amountINR
+                          ? `Your share of ₹${exp.amountINR.toLocaleString('en-IN')}`
+                          : 'Your individual expense'}
+                      </span>
+                    )}
+                    {isTripPlanner && !isPaymentReceived && !isDeposit && exp.splitMode === 'custom' && exp.splitWithUsers && (
                       <span className="text-[10px] text-slate-500">
                         ₹{Math.round(exp.amountINR / exp.splitWithUsers.length)} / person
                       </span>
                     )}
-                    {!isPaymentReceived && !isDeposit && exp.splitMode === 'all' && (
+                    {isTripPlanner && !isPaymentReceived && !isDeposit && (!exp.splitMode || exp.splitMode === 'all') && (
                       <span className="text-[10px] text-slate-500">
                         ₹{Math.round(exp.amountINR / Math.max(1, activeTravelers.length))} / person
                       </span>

@@ -909,6 +909,19 @@ function MainContent() {
     )
     .reduce((sum, e) => sum + (e.amountINR || 0), 0);
 
+  const activeMembersCount = Math.max(1, (activeTrip?.collaborators?.length || 0) + 1);
+  const myTravellerShare = expenses
+    .filter((e) => !e.transactionType || e.transactionType === 'expense')
+    .reduce((sum, e) => {
+      if (e.splitMode === 'single') {
+        return sum + (isMyTravellerIdentity(e.splitTargetUser) ? e.amountINR : 0);
+      }
+      if (e.splitMode === 'custom' && Array.isArray(e.splitWithUsers)) {
+        return sum + (e.splitWithUsers.some(isMyTravellerIdentity) ? Math.round(e.amountINR / Math.max(1, e.splitWithUsers.length)) : 0);
+      }
+      return sum + Math.round(e.amountINR / activeMembersCount);
+    }, 0);
+
 
   const tabs: { key: ActiveTab; label: string; shortLabel: string; icon: React.ReactNode; isProOnly?: boolean; count?: number }[] = [
     { key: 'home', label: 'Trip Overview', shortLabel: 'Home', icon: <Home className="w-4 h-4" /> },
@@ -1101,7 +1114,7 @@ function MainContent() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <CreditCard className="w-4 h-4 text-emerald-500" />
-                          <span>{isTripPlanner ? "Expenses & Ledger" : "My Contribution & Expenses"}</span>
+                          <span>{isTripPlanner ? "Expenses & Ledger" : "My Expense Share"}</span>
                         </span>
                         <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                           {visibleExpensesCount} entries
@@ -1110,7 +1123,7 @@ function MainContent() {
                       <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                         {isTripPlanner
                           ? `Budget: ₹${activeTrip.budgetINR.toLocaleString('en-IN')}`
-                          : `My Contribution: ₹${myTravellerContribution.toLocaleString('en-IN')}`}
+                          : `My Expenses: ₹${myTravellerShare.toLocaleString('en-IN')} (Paid: ₹${myTravellerContribution.toLocaleString('en-IN')})`}
                       </p>
                       <button
                         type="button"

@@ -57,11 +57,11 @@ netlify deploy --prod --dir=dist
 
 ---
 
-## 3. Deploying to Cloudflare Pages
+## 3. Deploying to Cloudflare (Pages & Workers)
 
-Cloudflare Pages natively serves Vite applications with high global edge performance. The included `public/_redirects` ensures seamless deep-link refreshes without 404 errors.
+Cloudflare natively serves Vite SPA applications with global edge caching and instant page loads.
 
-### Option A: Via Cloudflare Dashboard
+### Option A: Via Cloudflare Dashboard (Pages)
 1. Go to **Cloudflare Dashboard > Workers & Pages > Create application > Pages > Connect to Git**.
 2. Select your repository.
 3. Configure the build settings:
@@ -73,16 +73,20 @@ Cloudflare Pages natively serves Vite applications with high global edge perform
    - Any custom `VITE_*` variables if overriding default Firebase settings.
 5. Click **"Save and Deploy"**.
 
-### Option B: Via Wrangler CLI
+### Option B: Via Wrangler CLI (Workers Static Assets / Pages)
 ```bash
 npm run build
-npx wrangler pages deploy dist --project-name=jkvoyage
+npx wrangler deploy
 ```
+*Note: `wrangler.toml` has `not_found_handling = "single-page-application"` preconfigured, which natively routes all deep links to `index.html` without causing infinite redirect loops (`code: 100324`).*
 
-### Cloudflare Troubleshooting ("No build associated with that uuid"):
-- **Cause**: Cloudflare Pages runner terminates early if it detects an incompatible `bun.lock` file with version 2 on Bun 1.2.15, resulting in `UnknownLockfileVersion: failed to parse lockfile: 'bun.lock'` and an orphaned/unassociated build UUID in the dashboard.
-- **Fix**: The repository uses `package-lock.json` and excludes `bun.lock` in `.gitignore`. Cloudflare Pages will automatically install dependencies using standard `npm ci` and run `npm run build` cleanly.
-- If you see any cached build failure in the Cloudflare dashboard, trigger **"Clear build cache and deploy"** or start a new deployment.
+### Cloudflare Troubleshooting:
+- **Infinite loop detected in _redirects [code: 100324]**:
+  - **Cause**: Cloudflare Workers Static Assets API rejects wildcard redirects `/* /index.html 200` as an infinite loop.
+  - **Fix**: SPA fallback is handled natively via `not_found_handling = "single-page-application"` in `wrangler.toml`. Conflicting `_redirects` files are removed.
+- **"No build associated with that uuid"**:
+  - **Cause**: Occurred when `bun.lock` failed to parse in early runners.
+  - **Fix**: The repository uses standard `package-lock.json` and excludes `bun.lock`. Cloudflare builds cleanly with `npm ci`.
 
 ---
 

@@ -22,6 +22,7 @@ import { resolvePlacePhoto, EXPLORE_PLACES, getGemsForDestination } from "../dat
 
 import {
   searchNearbyPlaces,
+  fetchGeminiExplorePlaces,
   getPlacePhotoUrl,
   type GooglePlace,
   type PlaceSearchCategory,
@@ -382,6 +383,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                 location.longitude,
                 CATEGORY_TO_API[category],
                 15000,
+                trip.destination,
               ),
             ),
           );
@@ -406,6 +408,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             location.longitude,
             CATEGORY_TO_API[selectedCategory],
             15000,
+            trip.destination,
           );
 
           if (cancelled) return;
@@ -507,19 +510,37 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     }
   };
 
+  const [aiDiscovering, setAiDiscovering] = useState(false);
+
+  const handleAiDiscover = async () => {
+    if (!trip.destination?.trim() || aiDiscovering) return;
+    setAiDiscovering(true);
+    setLoadingPlaces(true);
+    try {
+      const aiPlaces = await fetchGeminiExplorePlaces(
+        trip.destination,
+        selectedCategory,
+        destinationCoordinates || undefined,
+        searchQuery || undefined
+      );
+      if (aiPlaces && aiPlaces.length > 0) {
+        setPlaces(aiPlaces);
+      }
+    } catch (err) {
+      console.warn("AI Discover error:", err);
+    } finally {
+      setAiDiscovering(false);
+      setLoadingPlaces(false);
+    }
+  };
+
   const handleCategoryChange = (category: ExploreCategory) => {
     setSelectedCategory(category);
     setSearchQuery("");
   };
 
   const retryPlaces = () => {
-    // Re-run the effect by changing category to
-    // itself through a temporary refresh mechanism.
     setPlacesError(null);
-
-    // The destination/category effect normally
-    // handles loading. A simple page reload isn't
-    // necessary.
     setSelectedCategory((current) => {
       return current === "all" ? "attraction" : "all";
     });
@@ -532,10 +553,30 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       ========================================== */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 p-6 sm:p-8 text-white shadow-xl">
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold text-sky-100 mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold text-sky-100">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Gemini AI & Places API Engine</span>
+            </div>
 
-            <span>Live Local Discovery</span>
+            <button
+              type="button"
+              onClick={handleAiDiscover}
+              disabled={aiDiscovering || loadingPlaces}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold shadow-md transition-all cursor-pointer disabled:opacity-50"
+            >
+              {aiDiscovering ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Discovering with Gemini...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>AI Discover with Gemini</span>
+                </>
+              )}
+            </button>
           </div>
 
           <h3 className="text-2xl sm:text-3xl font-black tracking-tight">

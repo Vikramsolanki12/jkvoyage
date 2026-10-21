@@ -55,20 +55,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize from LocalStorage or Firebase on startup
   useEffect(() => {
     try {
-      if (!localStorage.getItem('jkvoyage_users_deleted_v2')) {
-        localStorage.removeItem(LOCAL_USER_KEY);
-        localStorage.removeItem(LOCAL_PROFILE_KEY);
-        localStorage.removeItem(REGISTERED_ACCOUNTS_KEY);
-        localStorage.setItem('jkvoyage_users_deleted_v2', 'true');
-      }
-
+      // Restore saved user and profile without automatic logout
       const savedUserStr = localStorage.getItem(LOCAL_USER_KEY);
       const savedProfileStr = localStorage.getItem(LOCAL_PROFILE_KEY);
       if (savedUserStr && savedProfileStr) {
-        const parsedUser = JSON.parse(savedUserStr);
-        const parsedProfile = JSON.parse(savedProfileStr);
-        setCurrentUser(parsedUser);
-        setUserProfile(parsedProfile);
+        try {
+          const parsedUser = JSON.parse(savedUserStr);
+          const parsedProfile = JSON.parse(savedProfileStr);
+          if (parsedUser && parsedUser.uid) {
+            setCurrentUser(parsedUser);
+            setUserProfile(parsedProfile);
+          }
+        } catch (parseErr) {
+          console.warn('Could not parse cached auth state:', parseErr);
+        }
       }
     } catch (e) {
       console.warn('Could not read cached auth state:', e);

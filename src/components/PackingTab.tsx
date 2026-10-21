@@ -6,7 +6,8 @@ import {
   Trash2,
   Package,
   Sparkles,
-  Trophy
+  Trophy,
+  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PackingCategory, PackingItem, Trip } from '../types/travel.ts';
@@ -18,6 +19,7 @@ interface PackingTabProps {
   onToggleItem: (id: string, packed: boolean) => Promise<void>;
   onAddItem: (item: PackingItem) => Promise<void>;
   onDeleteItem: (id: string) => Promise<void>;
+  isTripPlanner?: boolean;
 }
 
 export const PackingTab: React.FC<PackingTabProps> = ({
@@ -25,9 +27,25 @@ export const PackingTab: React.FC<PackingTabProps> = ({
   packingItems,
   onToggleItem,
   onAddItem,
-  onDeleteItem
+  onDeleteItem,
+  isTripPlanner
 }) => {
   const { currentUser } = useAuth();
+
+  const isPlanner = Boolean(
+    isTripPlanner ??
+    (currentUser &&
+      trip &&
+      (trip.ownerId === currentUser.uid ||
+        (trip.ownerEmail && currentUser.email && trip.ownerEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+        (Array.isArray(trip.collaborators) &&
+          trip.collaborators.some(
+            (c) =>
+              c.role === 'planner' &&
+              ((currentUser.email && c.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+                (currentUser.uid && c.uid === currentUser.uid))
+          ))))
+  );
   const [selectedCategory, setSelectedCategory] = useState<PackingCategory | 'all'>('all');
   const [newItemText, setNewItemText] = useState('');
   const [newItemCategory, setNewItemCategory] = useState<PackingCategory>('essentials');
@@ -139,88 +157,106 @@ export const PackingTab: React.FC<PackingTabProps> = ({
           />
         </div>
 
-        {/* Quick Starter Bundles */}
-        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Quick Add Kits:
-          </span>
-          <button
-            onClick={() =>
-              addPresetBundle([
-                { text: 'Sunscreen SPF 50+', cat: 'essentials' },
-                { text: 'UV Sunglasses & Hat', cat: 'essentials' },
-                { text: 'Quick-dry Swimwear', cat: 'clothing' },
-                { text: 'Waterproof Phone Pouch', cat: 'electronics' }
-              ])
-            }
-            className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
-          >
-            + Beach Kit
-          </button>
-          <button
-            onClick={() =>
-              addPresetBundle([
-                { text: 'Compact Umbrella / Raincoat', cat: 'clothing' },
-                { text: 'Waterproof Backpack Cover', cat: 'essentials' },
-                { text: 'Mosquito Repellent Odomos', cat: 'meds' },
-                { text: 'Silica Gel Pouches for Bags', cat: 'essentials' }
-              ])
-            }
-            className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
-          >
-            + Monsoon Kit
-          </button>
-          <button
-            onClick={() =>
-              addPresetBundle([
-                { text: '20,000 mAh Fast Powerbank', cat: 'electronics' },
-                { text: 'Multi-port USB-C Wall Charger', cat: 'electronics' },
-                { text: 'Noise-canceling Earbuds', cat: 'electronics' }
-              ])
-            }
-            className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
-          >
-            + Tech Gear Kit
-          </button>
-        </div>
+        {/* Quick Starter Bundles - Only for Trip Planner */}
+        {isPlanner && (
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Quick Add Kits:
+            </span>
+            <button
+              onClick={() =>
+                addPresetBundle([
+                  { text: 'Sunscreen SPF 50+', cat: 'essentials' },
+                  { text: 'UV Sunglasses & Hat', cat: 'essentials' },
+                  { text: 'Quick-dry Swimwear', cat: 'clothing' },
+                  { text: 'Waterproof Phone Pouch', cat: 'electronics' }
+                ])
+              }
+              className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
+            >
+              + Beach Kit
+            </button>
+            <button
+              onClick={() =>
+                addPresetBundle([
+                  { text: 'Compact Umbrella / Raincoat', cat: 'clothing' },
+                  { text: 'Waterproof Backpack Cover', cat: 'essentials' },
+                  { text: 'Mosquito Repellent Odomos', cat: 'meds' },
+                  { text: 'Silica Gel Pouches for Bags', cat: 'essentials' }
+                ])
+              }
+              className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
+            >
+              + Monsoon Kit
+            </button>
+            <button
+              onClick={() =>
+                addPresetBundle([
+                  { text: '20,000 mAh Fast Powerbank', cat: 'electronics' },
+                  { text: 'Multi-port USB-C Wall Charger', cat: 'electronics' },
+                  { text: 'Noise-canceling Earbuds', cat: 'electronics' }
+                ])
+              }
+              className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap transition-colors"
+            >
+              + Tech Gear Kit
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Quick Add Form */}
-      <form
-        onSubmit={handleAddItem}
-        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
-      >
-        <input
-          type="text"
-          required
-          maxLength={150}
-          value={newItemText}
-          onChange={(e) => setNewItemText(e.target.value)}
-          placeholder="Add an item to luggage (e.g. Hiking boots, Camera battery)..."
-          className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
-        />
-
-        <select
-          value={newItemCategory}
-          onChange={(e) => setNewItemCategory(e.target.value as PackingCategory)}
-          className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-sky-500"
+      {/* Add Items: Trip Planner adds items, Travellers have read & check off permission */}
+      {isPlanner ? (
+        <form
+          onSubmit={handleAddItem}
+          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
         >
-          {categories.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+          <input
+            type="text"
+            required
+            maxLength={150}
+            value={newItemText}
+            onChange={(e) => setNewItemText(e.target.value)}
+            placeholder="Add an item to luggage (e.g. Hiking boots, Camera battery)..."
+            className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+          />
 
-        <button
-          type="submit"
-          disabled={submitting || !newItemText.trim()}
-          className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 text-slate-950 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add</span>
-        </button>
-      </form>
+          <select
+            value={newItemCategory}
+            onChange={(e) => setNewItemCategory(e.target.value as PackingCategory)}
+            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-sky-500"
+          >
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="submit"
+            disabled={submitting || !newItemText.trim()}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 text-slate-950 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Item</span>
+          </button>
+        </form>
+      ) : (
+        <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="p-2 rounded-xl bg-sky-500/10 text-sky-500 shrink-0">
+            <Lock className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Packing Checklist Managed by Trip Planner
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              As a traveller, you can check off items as you pack them. Adding and deleting checklist items is reserved for the Trip Planner.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Category Filter Pills */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
@@ -286,13 +322,15 @@ export const PackingTab: React.FC<PackingTabProps> = ({
                 </span>
               </button>
 
-              <button
-                onClick={() => onDeleteItem(item.id)}
-                className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                title="Remove item"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {isPlanner && (
+                <button
+                  onClick={() => onDeleteItem(item.id)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                  title="Remove item"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
         </div>

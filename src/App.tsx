@@ -883,6 +883,20 @@ function MainContent() {
             (exp.paidBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase() ||
               exp.receivedBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()))
       ).length;
+  const myTravellerContribution = expenses
+    .filter(
+      (exp) =>
+        (!exp.transactionType || exp.transactionType === 'expense' || exp.transactionType === 'deposit') &&
+        (exp.paidByUid === currentUser?.uid ||
+          exp.createdBy === currentUser?.uid ||
+          exp.paidBy === 'You' ||
+          (userProfile?.displayName &&
+            exp.paidBy?.trim().toLowerCase() === userProfile.displayName.trim().toLowerCase()) ||
+          (currentUser?.email &&
+            exp.paidBy?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()))
+    )
+    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+
 
   const tabs: { key: ActiveTab; label: string; shortLabel: string; icon: React.ReactNode; isProOnly?: boolean; count?: number }[] = [
     { key: 'home', label: 'Trip Overview', shortLabel: 'Home', icon: <Home className="w-4 h-4" /> },
@@ -1170,6 +1184,7 @@ function MainContent() {
                   onToggleItem={handleTogglePacking}
                   onAddItem={handleAddPackingItem}
                   onDeleteItem={handleDeletePackingItem}
+                  isTripPlanner={isTripCreator}
                 />
               )}
 

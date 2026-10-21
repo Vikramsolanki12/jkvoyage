@@ -146,6 +146,121 @@ Return a JSON array of items with { name: string, category: 'Clothing' | 'Electr
       }
     }
 
+    if (endpoint === 'explore-places') {
+      const { destination, category, coordinates, userQuery } = body;
+      const targetCat = category || 'all';
+      const cleanDest = destination || 'your destination';
+
+      if (ai) {
+        const promptText = `You are an expert Google Maps guide and local travel specialist.
+Discover 8 to 12 top-rated, authentic, verified nearby places, points of interest, and culinary or cultural highlights for travelers visiting ${cleanDest}.
+Category filter: "${targetCat}" (where 'all' includes iconic attractions, top dining, cafes, and stays; 'attraction' focuses on top sights and monuments; 'restaurant' on local cuisine; 'cafe' on coffee and brunch spots; 'hotel' on stays).
+${coordinates ? `Geographic center: latitude ${coordinates.latitude}, longitude ${coordinates.longitude}.` : ''}
+${userQuery ? `Specific traveler request / query: "${userQuery}".` : ''}
+
+Return ONLY a JSON array of objects with this exact structure:
+[
+  {
+    "id": "place_unique_id",
+    "title": "Official Place Name",
+    "category": "attraction" | "food" | "culture" | "nature" | "hotel",
+    "address": "Specific locality or road, ${cleanDest}",
+    "rating": 4.7,
+    "reviewCount": 1850,
+    "bestTime": "Recommended visiting hours or sunset slot",
+    "estCostINR": 350,
+    "insiderTip": "Actionable insider tip, entry advice, or photo spot recommendation",
+    "tags": ["Tag1", "Tag2", "Tag3"],
+    "latitude": 28.6139,
+    "longitude": 77.2090,
+    "googleMapsUri": "https://www.google.com/maps/search/?api=1&query=Official+Place+Name+${encodeURIComponent(cleanDest)}"
+  }
+]`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: promptText,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        try {
+          const parsed = JSON.parse(response.text || '[]');
+          sendJson(res, 200, { places: parsed, poweredBy: 'Gemini 3.8 Flash' });
+          return true;
+        } catch {
+          sendJson(res, 200, { places: [], poweredBy: 'Gemini 3.8 Flash' });
+          return true;
+        }
+      } else {
+        const simulatedPlaces = [
+          {
+            id: 'gemini_gem_1',
+            title: `${cleanDest} Old Heritage Quarter & Fort`,
+            category: 'culture',
+            address: `Heritage District, Central ${cleanDest}`,
+            rating: 4.8,
+            reviewCount: 3420,
+            bestTime: 'Early morning 7:30 AM - 10:00 AM (least crowd)',
+            estCostINR: 200,
+            insiderTip: 'Book entry pass online or hire an accredited ASI certified guide at the south gate.',
+            tags: ['Heritage', 'Architecture', 'Iconic Landmark'],
+            latitude: coordinates?.latitude || 26.9124,
+            longitude: coordinates?.longitude || 75.7873,
+            googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest)}+Heritage+Fort`
+          },
+          {
+            id: 'gemini_gem_2',
+            title: `The Spice & Artisan Royal Bazaar`,
+            category: 'attraction',
+            address: `Old City Market, ${cleanDest}`,
+            rating: 4.7,
+            reviewCount: 2890,
+            bestTime: 'Evening 5:00 PM - 8:30 PM when lanterns light up',
+            estCostINR: 150,
+            insiderTip: 'Try the traditional saffron tea and handmade lac bangles; standard bargaining is customary.',
+            tags: ['Bazaar', 'Local Crafts', 'Street Food'],
+            latitude: (coordinates?.latitude || 26.9124) + 0.005,
+            longitude: (coordinates?.longitude || 75.7873) + 0.004,
+            googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest)}+Bazaar`
+          },
+          {
+            id: 'gemini_gem_3',
+            title: `Heritage Grand Thali & Dining Courtyard`,
+            category: 'food',
+            address: `Palace Road, ${cleanDest}`,
+            rating: 4.9,
+            reviewCount: 4120,
+            bestTime: 'Lunch 12:30 PM - 2:30 PM or Candlelight Dinner',
+            estCostINR: 650,
+            insiderTip: 'Order the authentic Rajasthani / regional festive thali with freshly churned butter and warm rotis.',
+            tags: ['Fine Dining', 'Authentic Regional', 'Vegetarian Friendly'],
+            latitude: (coordinates?.latitude || 26.9124) - 0.004,
+            longitude: (coordinates?.longitude || 75.7873) + 0.006,
+            googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest)}+Traditional+Dining`
+          },
+          {
+            id: 'gemini_gem_4',
+            title: `Artisan Roastery & Rooftop Cafe`,
+            category: 'food',
+            address: `Lakeview Promenade, ${cleanDest}`,
+            rating: 4.6,
+            reviewCount: 1640,
+            bestTime: 'Late afternoon 4:00 PM for sunset views',
+            estCostINR: 320,
+            insiderTip: 'Outdoor balcony seats have the best panoramic skyline photo vantage point with great cold brew.',
+            tags: ['Cafe', 'Rooftop', 'Sunset View'],
+            latitude: (coordinates?.latitude || 26.9124) + 0.008,
+            longitude: (coordinates?.longitude || 75.7873) - 0.005,
+            googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest)}+Rooftop+Cafe`
+          }
+        ];
+        sendJson(res, 200, { places: simulatedPlaces, isSimulated: true, poweredBy: 'Gemini Travel Concierge' });
+        return true;
+      }
+    }
+
     sendJson(res, 404, { error: 'Unknown Gemini endpoint' });
     return true;
   } catch (error: any) {

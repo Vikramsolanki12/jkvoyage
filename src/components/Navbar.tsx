@@ -217,7 +217,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={logout}
                   title="Sign out of account"
-                  className="hidden sm:inline-flex p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>

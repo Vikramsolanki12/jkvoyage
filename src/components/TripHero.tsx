@@ -22,7 +22,8 @@ import {
   Camera,
   Maximize2,
   Eye,
-  Upload
+  Upload,
+  HandCoins
 } from "lucide-react";
 
 import {
@@ -143,7 +144,7 @@ export const TripHero: React.FC<TripHeroProps> = ({
   };
 
   // =========================================================
-  // Budget calculations
+  // Budget & Personal Contribution calculations
   // =========================================================
 
   const totalSpent = expenses.reduce(
@@ -157,6 +158,60 @@ export const TripHero: React.FC<TripHeroProps> = ({
     100,
     Math.round((totalSpent / Math.max(1, trip.budgetINR)) * 100),
   );
+
+  // Helper to identify if a transaction relates to current user
+  const isMyIdentity = (nameOrUid?: string): boolean => {
+    if (!nameOrUid) return false;
+    const clean = nameOrUid.trim().toLowerCase();
+    if (clean === "you") return true;
+    if (currentUser?.uid && nameOrUid === currentUser.uid) return true;
+    if (currentUser?.email && clean === currentUser.email.trim().toLowerCase()) return true;
+    if (userProfile?.displayName && clean === userProfile.displayName.trim().toLowerCase()) return true;
+    if (currentUser?.displayName && clean === currentUser.displayName.trim().toLowerCase()) return true;
+    return false;
+  };
+
+  // Personal contribution calculations for Traveller:
+  const myPaidExpenses = expenses
+    .filter(
+      (e) =>
+        (!e.transactionType || e.transactionType === "expense" || e.transactionType === "deposit") &&
+        (isMyIdentity(e.paidBy) || isMyIdentity(e.paidByUid) || isMyIdentity(e.createdBy))
+    )
+    .reduce((sum, item) => sum + (item.amountINR || 0), 0);
+
+  const myPaymentsMade = expenses
+    .filter(
+      (e) =>
+        e.transactionType === "payment_received" &&
+        (isMyIdentity(e.paidBy) || isMyIdentity(e.paidByUid))
+    )
+    .reduce((sum, item) => sum + (item.amountINR || 0), 0);
+
+  const myPaymentsReceived = expenses
+    .filter(
+      (e) =>
+        e.transactionType === "payment_received" &&
+        (isMyIdentity(e.receivedBy) || isMyIdentity(e.receivedByUid))
+    )
+    .reduce((sum, item) => sum + (item.amountINR || 0), 0);
+
+  const myTotalContribution = myPaidExpenses + myPaymentsMade;
+
+  const activeMembersCount = Math.max(1, (trip.collaborators?.length || 0) + 1);
+  const myOwedShare = expenses
+    .filter((e) => !e.transactionType || e.transactionType === "expense")
+    .reduce((sum, e) => {
+      if (e.splitMode === "single") {
+        return sum + (isMyIdentity(e.splitTargetUser) ? e.amountINR : 0);
+      }
+      if (e.splitMode === "custom" && Array.isArray(e.splitWithUsers)) {
+        return sum + (e.splitWithUsers.some(isMyIdentity) ? e.amountINR / Math.max(1, e.splitWithUsers.length) : 0);
+      }
+      return sum + e.amountINR / activeMembersCount;
+    }, 0);
+
+  const myNetBalance = myTotalContribution - myOwedShare - myPaymentsReceived;
 
   // =========================================================
   // Packing calculations
@@ -443,53 +498,103 @@ export const TripHero: React.FC<TripHeroProps> = ({
         ================================================== */}
 
         <div className="grid grid-cols-2 gap-2.5 sm:gap-4 pb-4 sm:grid-cols-4">
-          {/* Trip Budget */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
-            <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span className="truncate">Trip Budget</span>
-              <IndianRupee className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
-            </div>
+          {/* Card 1: Trip Budget for Planner, My Contribution for Traveller */}
+          {isTripPlanner ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="truncate">Trip Budget</span>
+                <IndianRupee className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+              </div>
 
-            <div className="text-base sm:text-xl font-bold text-slate-900 dark:text-white truncate">
-              ₹{trip.budgetINR.toLocaleString("en-IN")}
-            </div>
+              <div className="text-base sm:text-xl font-bold text-slate-900 dark:text-white truncate">
+                ₹{trip.budgetINR.toLocaleString("en-IN")}
+              </div>
 
-            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              INR Allocated
+              <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                INR Allocated
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="truncate">My Contribution</span>
+                <HandCoins className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+              </div>
 
-          {/* Total Spent */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
-            <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span className="truncate">Total Spent</span>
-              <span
-                className={`rounded px-1.5 py-0.2 text-[10px] font-semibold shrink-0 ${
-                  budgetPercent > 90
-                    ? "bg-rose-500/20 text-rose-500 dark:text-rose-400"
-                    : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+              <div className="text-base sm:text-xl font-bold text-slate-900 dark:text-white truncate">
+                ₹{myTotalContribution.toLocaleString("en-IN")}
+              </div>
+
+              <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                Paid by you
+              </div>
+            </div>
+          )}
+
+          {/* Card 2: Total Spent for Planner, My Net Balance for Traveller */}
+          {isTripPlanner ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="truncate">Total Spent</span>
+                <span
+                  className={`rounded px-1.5 py-0.2 text-[10px] font-semibold shrink-0 ${
+                    budgetPercent > 90
+                      ? "bg-rose-500/20 text-rose-500 dark:text-rose-400"
+                      : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {budgetPercent}%
+                </span>
+              </div>
+
+              <div
+                className={`text-base sm:text-xl font-bold truncate ${
+                  remainingBudget < 0
+                    ? "text-rose-500 dark:text-rose-400"
+                    : "text-slate-900 dark:text-slate-100"
                 }`}
               >
-                {budgetPercent}%
-              </span>
-            </div>
+                ₹{totalSpent.toLocaleString("en-IN")}
+              </div>
 
-            <div
-              className={`text-base sm:text-xl font-bold truncate ${
-                remainingBudget < 0
-                  ? "text-rose-500 dark:text-rose-400"
-                  : "text-slate-900 dark:text-slate-100"
-              }`}
-            >
-              ₹{totalSpent.toLocaleString("en-IN")}
+              <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                {remainingBudget >= 0
+                  ? `₹${remainingBudget.toLocaleString("en-IN")} left`
+                  : `₹${Math.abs(remainingBudget).toLocaleString("en-IN")} over`}
+              </div>
             </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="truncate">My Net Balance</span>
+                <span
+                  className={`rounded px-1.5 py-0.2 text-[10px] font-semibold shrink-0 ${
+                    myNetBalance >= 0
+                      ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                      : "bg-rose-500/20 text-rose-500 dark:text-rose-400"
+                  }`}
+                >
+                  {myNetBalance >= 0 ? "Credit" : "Due"}
+                </span>
+              </div>
 
-            <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {remainingBudget >= 0
-                ? `₹${remainingBudget.toLocaleString("en-IN")} left`
-                : `₹${Math.abs(remainingBudget).toLocaleString("en-IN")} over`}
+              <div
+                className={`text-base sm:text-xl font-bold truncate ${
+                  myNetBalance >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                {myNetBalance >= 0
+                  ? `+₹${Math.round(myNetBalance).toLocaleString("en-IN")}`
+                  : `-₹${Math.round(Math.abs(myNetBalance)).toLocaleString("en-IN")}`}
+              </div>
+
+              <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                {myNetBalance >= 0 ? "To receive back" : "To pay to group"}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Itinerary */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-3.5 dark:border-slate-800/80 dark:bg-slate-950/60 min-w-0">
@@ -535,32 +640,49 @@ export const TripHero: React.FC<TripHeroProps> = ({
         ================================================== */}
 
         <div className="flex flex-col justify-between gap-4 pt-4 sm:flex-row sm:items-center">
-          {/* Budget progress */}
-          <div className="max-w-lg flex-1">
-            <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-              <span>Budget Consumption Progress</span>
+          {/* Budget progress for planner / Personal contribution status for traveller */}
+          {isTripPlanner ? (
+            <div className="max-w-lg flex-1">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+                <span>Budget Consumption Progress</span>
 
-              <span>
-                ₹{totalSpent.toLocaleString("en-IN")} of ₹
-                {trip.budgetINR.toLocaleString("en-IN")}
-              </span>
-            </div>
+                <span>
+                  ₹{totalSpent.toLocaleString("en-IN")} of ₹
+                  {trip.budgetINR.toLocaleString("en-IN")}
+                </span>
+              </div>
 
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 p-0.5 dark:bg-slate-800">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  budgetPercent > 95
-                    ? "bg-rose-500"
-                    : budgetPercent > 75
-                      ? "bg-amber-500"
-                      : "bg-gradient-to-r from-sky-500 to-emerald-400"
-                }`}
-                style={{
-                  width: `${budgetPercent}%`,
-                }}
-              />
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 p-0.5 dark:bg-slate-800">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    budgetPercent > 95
+                      ? "bg-rose-500"
+                      : budgetPercent > 75
+                        ? "bg-amber-500"
+                        : "bg-gradient-to-r from-sky-500 to-emerald-400"
+                  }`}
+                  style={{
+                    width: `${budgetPercent}%`,
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="max-w-lg flex-1">
+              <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <HandCoins className="w-4 h-4 text-sky-500" />
+                  <span>My Contribution Status</span>
+                </span>
+                <span className="font-extrabold text-sky-600 dark:text-sky-400">
+                  ₹{myTotalContribution.toLocaleString("en-IN")} contributed
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Showing your individual contribution & settlement balance. Overall group expenses are private to the Trip Planner.
+              </p>
+            </div>
+          )}
 
           {/* Trip status */}
           <div className="flex items-center gap-2">

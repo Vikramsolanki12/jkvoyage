@@ -1253,13 +1253,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             const isDeposit = exp.transactionType === 'deposit';
             const cat = categoryColors[exp.category] || categoryColors.other;
 
-            const splitLabel =
-              exp.splitMode === 'single'
-                ? `👤 1 User (${exp.splitTargetUser || 'Single'})`
-                : exp.splitMode === 'custom' && exp.splitWithUsers
-                ? `👫 ${exp.splitWithUsers.length} Users (${exp.splitWithUsers.join(', ')})`
-                : `👥 All Users (${activeTravelers.length} traveler${activeTravelers.length === 1 ? '' : 's'})`;
-
+            const splitLabel = !isTripPlanner
+  ? '👤 Your share'
+  : exp.splitMode === 'single'
+  ? `👤 1 User (${exp.splitTargetUser || 'Single'})`
+  : exp.splitMode === 'custom' && exp.splitWithUsers
+  ? `👫 ${exp.splitWithUsers.length} Users (${exp.splitWithUsers.join(', ')})`
+  : `👥 All Users (${activeTravelers.length} traveler${activeTravelers.length === 1 ? '' : 's'})`;
             return (
               <div
                 key={exp.id}
@@ -1353,12 +1353,10 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       </span>
                     </div>
                     {!isTripPlanner && !isPaymentReceived && !isDeposit && (
-                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">
-                        {getTravellerShare(exp) !== exp.amountINR
-                          ? `Your share of ₹${exp.amountINR.toLocaleString('en-IN')}`
-                          : 'Your individual expense'}
-                      </span>
-                    )}
+  <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">
+    Your share
+  </span>
+)}
                     {isTripPlanner && !isPaymentReceived && !isDeposit && exp.splitMode === 'custom' && exp.splitWithUsers && (
                       <span className="text-[10px] text-slate-500">
                         ₹{Math.round(exp.amountINR / exp.splitWithUsers.length)} / person

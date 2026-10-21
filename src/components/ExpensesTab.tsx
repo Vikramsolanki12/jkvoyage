@@ -125,15 +125,19 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const isMyTravelerName = React.useCallback((name?: string): boolean => {
     if (!name) return false;
     const n = name.trim().toLowerCase();
-    if (n === 'you') return true;
+    if (n === 'you' || n === 'me' || n === 'myself') return true;
 
     const myProfileName = (userProfile?.displayName || '').trim().toLowerCase();
     const myAuthName = (currentUser?.displayName || '').trim().toLowerCase();
     const myEmail = (currentUser?.email || '').trim().toLowerCase();
+    const emailPrefix = myEmail ? myEmail.split('@')[0] : '';
 
     if (myProfileName && n === myProfileName) return true;
     if (myAuthName && n === myAuthName) return true;
     if (myEmail && n === myEmail) return true;
+    if (emailPrefix && n === emailPrefix) return true;
+
+    if (currentUser?.uid && (n === currentUser.uid.toLowerCase() || name === currentUser.uid)) return true;
 
     // Check if any collaborator matching the user's email or uid had this name
     if (Array.isArray(trip.collaborators)) {
@@ -142,6 +146,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       );
       if (myCollab?.name && n === myCollab.name.trim().toLowerCase()) return true;
       if (myCollab?.email && n === myCollab.email.trim().toLowerCase()) return true;
+      if (myCollab?.uid && (n === myCollab.uid.toLowerCase() || name === myCollab.uid)) return true;
     }
 
     return false;
@@ -286,78 +291,55 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   // Helper to determine the traveller's individual share of an expense:
   // (e.g. 1000 INR split across 5 travellers = strictly 200 INR for this traveller)
   
-const getTravellerShare = React.useCallback(
-  (exp: Expense): number => {
-    // Payments and deposits: show the full amount
-    if (
-      exp.transactionType === 'payment_received' ||
-      exp.transactionType === 'deposit'
-    ) {
-      return exp.amountINR;
-    }
-
-    // 1. Explicit per-traveller splits
-    
-    // 1. Explicit per-traveller splits
-    if (Array.isArray(exp.splits) && exp.splits.length > 0) {
-      const mySplit = exp.splits.find((s) =>
-        isMyTravelerName(s.userName)
-      );
-
-      if (mySplit) {
-        return Math.round(mySplit.amount);
-      }
-
-      // Fallback: use selected travellers if names don't match
+  const getTravellerShare = React.useCallback(
+    (exp: Expense): number => {
+      // Payments and deposits: show the full amount
       if (
-        (exp.splitMode === 'custom' ||
-          !exp.splitMode ||
-          exp.splitMode === 'all') &&
-        Array.isArray(exp.splitWithUsers) &&
-        exp.splitWithUsers.some((u) => isMyTravelerName(u))
+        exp.transactionType === 'payment_received' ||
+        exp.transactionType === 'deposit'
       ) {
-        return Math.round(
-          exp.amountINR / exp.splitWithUsers.length
-        );
+        return exp.amountINR;
       }
 
-      return 0;
-    }
+      const totalMembers = Math.max(1, activeTravelers.length);
+      const defaultEqualShare = Math.round(exp.amountINR / totalMembers);
 
+      // 1. Single target user
+      if (exp.splitMode === 'single') {
+        return isMyTravelerName(exp.splitTargetUser) ? exp.amountINR : 0;
+      }
 
-    // 2. Single traveller
-    if (exp.splitMode === 'single') {
-      return isMyTravelerName(exp.splitTargetUser)
-        ? exp.amountINR
-        : 0;
-    }
+      // 2. Custom split among specific users
+      if (exp.splitMode === 'custom') {
+        if (Array.isArray(exp.splits) && exp.splits.length > 0) {
+          const mySplit = exp.splits.find((s) => isMyTravelerName(s.userName));
+          if (mySplit) return Math.round(mySplit.amount);
+        }
+        if (Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
+          const isIncluded = exp.splitWithUsers.some((u) => isMyTravelerName(u));
+          return isIncluded ? Math.round(exp.amountINR / Math.max(1, exp.splitWithUsers.length)) : 0;
+        }
+        return 0;
+      }
 
-    // 3. Custom split among selected travellers
-    if (
-      exp.splitMode === 'custom' &&
-      Array.isArray(exp.splitWithUsers) &&
-      exp.splitWithUsers.length > 0
-    ) {
-      const isIncluded = exp.splitWithUsers.some((user) =>
-        isMyTravelerName(user)
-      );
+      // 3. Split across all travellers (splitMode === 'all' or default):
+      // First check if explicit per-member splits list contains this user
+      if (Array.isArray(exp.splits) && exp.splits.length > 0) {
+        const mySplit = exp.splits.find((s) => isMyTravelerName(s.userName));
+        if (mySplit) {
+          return Math.round(mySplit.amount);
+        }
+      }
 
-      return isIncluded
-        ? Math.round(exp.amountINR / exp.splitWithUsers.length)
-        : 0;
-    }
-
-    // 4. Split among all travellers
-    const totalMembers = Math.max(1, activeTravelers.length);
-
-    return Math.round(exp.amountINR / totalMembers);
-  },
-  [activeTravelers, isMyTravelerName]
-);
-
+      // For all travellers split: always return their equal share (e.g. 1000 INR / 5 = 200 INR)
+      return defaultEqualShare;
+    },
+    [activeTravelers, isMyTravelerName]
+  );
 
   // Helper to determine if an expense is relevant to the current traveller
   const isMyOwnExpense = React.useCallback((exp: Expense): boolean => {
+    // Payments & deposits
     if (exp.transactionType === 'payment_received' || exp.transactionType === 'deposit') {
       return (
         isMyTravelerName(exp.paidBy) ||
@@ -367,7 +349,36 @@ const getTravellerShare = React.useCallback(
         exp.createdBy === currentUser?.uid
       );
     }
-    // Expense is relevant if traveller has a share in it or paid it
+
+    // 1. Group expense split among all travellers is ALWAYS relevant to every traveller
+    if (!exp.splitMode || exp.splitMode === 'all') {
+      return true;
+    }
+
+    // 2. Single target user
+    if (exp.splitMode === 'single') {
+      return (
+        isMyTravelerName(exp.splitTargetUser) ||
+        isMyTravelerName(exp.paidBy) ||
+        exp.paidByUid === currentUser?.uid ||
+        exp.createdBy === currentUser?.uid
+      );
+    }
+
+    // 3. Custom selected users
+    if (exp.splitMode === 'custom') {
+      const inCustom = Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => isMyTravelerName(u));
+      const inSplits = Array.isArray(exp.splits) && exp.splits.some((s) => isMyTravelerName(s.userName));
+      return (
+        inCustom ||
+        inSplits ||
+        isMyTravelerName(exp.paidBy) ||
+        exp.paidByUid === currentUser?.uid ||
+        exp.createdBy === currentUser?.uid
+      );
+    }
+
+    // 4. Default: relevant if traveller has a share in it or paid it
     return (
       getTravellerShare(exp) > 0 ||
       isMyTravelerName(exp.paidBy) ||

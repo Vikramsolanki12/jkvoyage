@@ -897,6 +897,7 @@ function MainContent() {
           isMyTravellerIdentity(exp.createdBy) ||
           isMyTravellerIdentity(exp.receivedBy) ||
           isMyTravellerIdentity(exp.receivedByUid) ||
+          (!exp.splitMode || exp.splitMode === 'all') ||
           (exp.splitMode === 'single' && isMyTravellerIdentity(exp.splitTargetUser)) ||
           (exp.splitMode === 'custom' && Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some(isMyTravellerIdentity))
       ).length;

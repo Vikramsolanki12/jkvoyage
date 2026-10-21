@@ -842,6 +842,27 @@ function MainContent() {
     triggerToast(title, message, type);
   };
 
+  const myTravellerCollab = activeTrip && Array.isArray(activeTrip.collaborators)
+    ? activeTrip.collaborators.find(
+        (c) => (currentUser?.email && c.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+               (currentUser?.uid && c.uid === currentUser.uid)
+      )
+    : null;
+
+  const isMyTravellerIdentity = React.useCallback((ident?: string): boolean => {
+    if (!ident) return false;
+    const clean = ident.trim().toLowerCase();
+    if (clean === 'you') return true;
+    if (currentUser?.uid && ident === currentUser.uid) return true;
+    if (currentUser?.email && clean === currentUser.email.trim().toLowerCase()) return true;
+    if (currentUser?.email && clean === currentUser.email.split('@')[0].toLowerCase()) return true;
+    if (userProfile?.displayName && clean === userProfile.displayName.trim().toLowerCase()) return true;
+    if (currentUser?.displayName && clean === currentUser.displayName.trim().toLowerCase()) return true;
+    if (myTravellerCollab?.name && clean === myTravellerCollab.name.trim().toLowerCase()) return true;
+    if (myTravellerCollab?.email && clean === myTravellerCollab.email.trim().toLowerCase()) return true;
+    return false;
+  }, [currentUser, userProfile, myTravellerCollab]);
+
   // If user is NOT logged in, show the Landing Page with compulsory registration
   if (!currentUser) {
     return (
@@ -866,27 +887,6 @@ function MainContent() {
       </>
     );
   }
-
-  const myTravellerCollab = activeTrip && Array.isArray(activeTrip.collaborators)
-    ? activeTrip.collaborators.find(
-        (c) => (currentUser?.email && c.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-               (currentUser?.uid && c.uid === currentUser.uid)
-      )
-    : null;
-
-  const isMyTravellerIdentity = React.useCallback((ident?: string): boolean => {
-    if (!ident) return false;
-    const clean = ident.trim().toLowerCase();
-    if (clean === 'you') return true;
-    if (currentUser?.uid && ident === currentUser.uid) return true;
-    if (currentUser?.email && clean === currentUser.email.trim().toLowerCase()) return true;
-    if (currentUser?.email && clean === currentUser.email.split('@')[0].toLowerCase()) return true;
-    if (userProfile?.displayName && clean === userProfile.displayName.trim().toLowerCase()) return true;
-    if (currentUser?.displayName && clean === currentUser.displayName.trim().toLowerCase()) return true;
-    if (myTravellerCollab?.name && clean === myTravellerCollab.name.trim().toLowerCase()) return true;
-    if (myTravellerCollab?.email && clean === myTravellerCollab.email.trim().toLowerCase()) return true;
-    return false;
-  }, [currentUser, userProfile, myTravellerCollab]);
 
   const visibleExpensesCount = isTripPlanner
     ? expenses.length
@@ -921,7 +921,6 @@ function MainContent() {
       }
       return sum + Math.round(e.amountINR / activeMembersCount);
     }, 0);
-
 
   const tabs: { key: ActiveTab; label: string; shortLabel: string; icon: React.ReactNode; isProOnly?: boolean; count?: number }[] = [
     { key: 'home', label: 'Trip Overview', shortLabel: 'Home', icon: <Home className="w-4 h-4" /> },

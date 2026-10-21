@@ -9,3 +9,6 @@ coverage/
 firebase-applet-config.json
 bun.lock
 bun.lockb
+_redirects
+public/_redirects
+dist/_redirects

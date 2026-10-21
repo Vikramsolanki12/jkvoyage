@@ -462,7 +462,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="name@example.com"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                   />
                 </div>
               </div>
@@ -479,7 +479,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="••••••••"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full pl-9 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                   />
                   <button
                     type="button"
@@ -608,7 +608,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="e.g. Aarav Sharma"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -625,7 +625,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="traveler@jkvoyage.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -644,7 +644,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-8 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                     <button
                       type="button"
@@ -668,7 +668,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -700,7 +700,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={aadhaarNumber}
                     onChange={(e) => handleAadhaarChange(e.target.value)}
                     maxLength={14}
-                    className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-sky-400 dark:border-sky-600 rounded-xl text-sm font-mono tracking-widest text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 font-bold"
+                    className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-sky-400 dark:border-sky-600 rounded-xl text-base sm:text-sm font-mono tracking-widest text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 font-bold"
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
@@ -720,7 +720,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={dateOfBirth}
                       onChange={(e) => setDateOfBirth(e.target.value)}
-                      className="w-full pl-8 pr-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -732,7 +732,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -751,7 +751,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="Indian"
                     value={nationality}
                     onChange={(e) => setNationality(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                   />
                 </div>
               </div>
@@ -780,7 +780,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="+91 98290 12345"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -797,7 +797,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="e.g. Jaipur, Rajasthan"
                       value={homeCity}
                       onChange={(e) => setHomeCity(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -813,7 +813,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   placeholder="e.g. 24, Malviya Nagar, Jaipur, Rajasthan 302017"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 />
               </div>
             </div>
@@ -839,7 +839,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="e.g. Rajesh Sharma"
                     value={emergencyContactName}
                     onChange={(e) => setEmergencyContactName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
                   />
                 </div>
 
@@ -850,7 +850,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <select
                     value={emergencyContactRelation}
                     onChange={(e) => setEmergencyContactRelation(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
                   >
                     <option value="Family">Family Member</option>
                     <option value="Parent">Parent</option>
@@ -870,7 +870,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="+91 98290 98765"
                     value={emergencyContactPhone}
                     onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
                   />
                 </div>
               </div>
@@ -885,7 +885,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <select
                   value={bloodGroup}
                   onChange={(e) => setBloodGroup(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 >
                   <option value="A+">A+</option>
                   <option value="A-">A-</option>
@@ -905,7 +905,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <select
                   value={travelStyle}
                   onChange={(e) => setTravelStyle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 >
                   <option value="Heritage & Culture">🏛️ Heritage & Culture</option>
                   <option value="Adventure & Trekking">🧗 Adventure & Trekking</option>
@@ -921,7 +921,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <select
                   value={dietaryPreference}
                   onChange={(e) => setDietaryPreference(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-base sm:text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
                 >
                   <option value="Pure Vegetarian">Pure Vegetarian</option>
                   <option value="Jain Vegetarian">Jain Vegetarian</option>

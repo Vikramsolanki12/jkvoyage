@@ -22,3 +22,12 @@ img, iframe, svg, canvas {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Prevent auto-zoom on input focus in iOS Safari / Mobile browsers (requires >= 16px font-size) */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

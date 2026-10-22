@@ -81,9 +81,12 @@ npx wrangler deploy
 *Note: `wrangler.toml` has `not_found_handling = "single-page-application"` preconfigured, which natively routes all deep links to `index.html` without causing infinite redirect loops (`code: 100324`).*
 
 ### Cloudflare Troubleshooting:
+- **"Variables cannot be added to a Worker that only has static assets"**:
+  - **Cause**: In Cloudflare Workers, an asset-only Worker (one with `[assets]` in `wrangler.toml` but without a `main` script entry) does not allow adding environment variables or secrets in the Cloudflare dashboard.
+  - **Fix**: The repository includes `main = "src/worker.ts"` alongside `[assets]` in `wrangler.toml`. With `src/worker.ts` enabled as the edge router, Cloudflare recognizes the worker script and enables the **Variables and Secrets** settings tab! You can now add `GEMINI_API_KEY` and `VITE_GOOGLE_PLACES_API_KEY` in the Cloudflare Dashboard under **Workers & Pages > jkvoyage > Settings > Variables and Secrets**.
 - **Infinite loop detected in _redirects [code: 100324]**:
   - **Cause**: Cloudflare Workers Static Assets API rejects wildcard redirects `/* /index.html 200` as an infinite loop.
-  - **Fix**: SPA fallback is handled natively via `not_found_handling = "single-page-application"` in `wrangler.toml`. Conflicting `_redirects` files are removed.
+  - **Fix**: SPA fallback is handled natively via `not_found_handling = "single-page-application"` in `wrangler.toml`. Conflicting `_redirects` files are removed during build.
 - **"No build associated with that uuid"**:
   - **Cause**: Occurred when `bun.lock` failed to parse in early runners.
   - **Fix**: The repository uses standard `package-lock.json` and excludes `bun.lock`. Cloudflare builds cleanly with `npm ci`.

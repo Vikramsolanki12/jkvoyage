@@ -23,7 +23,8 @@ import {
   Calendar,
   Lock,
   Crown,
-  Filter
+  Filter,
+  Edit3
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -52,6 +53,7 @@ interface ExpensesTabProps {
   expenses: Expense[];
   isTripCreator: boolean;
   onAddExpense: (expense: Expense) => Promise<void>;
+  onUpdateExpense?: (expense: Expense) => Promise<void>;
   onProposeExpense?: (expense: Expense) => Promise<void>;
   onDeleteExpense: (id: string) => Promise<void>;
 }
@@ -61,11 +63,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   expenses,
   isTripCreator,
   onAddExpense,
+  onUpdateExpense,
   onProposeExpense,
   onDeleteExpense
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -526,6 +530,24 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     return amountINR;
   };
 
+  const handleStartEditExpense = (exp: Expense) => {
+    setEditingExpenseId(exp.id);
+    setTransactionType(exp.transactionType || 'expense');
+    setDescription(exp.description);
+    setAmountINR(exp.amountINR);
+    setCategory(exp.category || 'food');
+    setPaidBy(exp.paidBy || currentUserName);
+    setReceivedBy(exp.receivedBy || currentUserName);
+    setPaymentMethod(exp.paymentMethod || 'UPI');
+    setDate(exp.date || new Date().toISOString().split('T')[0]);
+    setSplitMode(exp.splitMode || 'all');
+    if (exp.splitTargetUser) setSingleTargetUser(exp.splitTargetUser);
+    if (Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
+      setCustomSelectedUsers(exp.splitWithUsers);
+    }
+    setModalOpen(true);
+  };
+
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isTripPlanner) return;
@@ -570,6 +592,50 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       const payerName = paidBy.trim() || currentUserName;
       const receiverName = receivedBy.trim() || currentUserName;
 
+      if (editingExpenseId) {
+        const existing = expenses.find((e) => e.id === editingExpenseId);
+        const updatedExp: Expense = {
+          ...existing,
+          id: editingExpenseId,
+          tripId: trip.id,
+          description: description.trim(),
+          amountINR: Number(amountINR),
+          paidBy: payerName,
+          paidByUid: existing?.paidByUid || currentUser?.uid || 'user_local',
+          category,
+          date: date || new Date().toISOString().split('T')[0],
+          createdBy: existing?.createdBy || creatorUid,
+          createdAt: existing?.createdAt || new Date().toISOString(),
+          splitMode: transactionType === 'expense' ? splitMode : undefined,
+          splitTargetUser:
+            transactionType === 'expense' && splitMode === 'single'
+              ? singleTargetUser
+              : undefined,
+          splitWithUsers: transactionType === 'expense' ? splitWithUsers : undefined,
+          splits: transactionType === 'expense' ? splits : undefined,
+          transactionType,
+          receivedBy: transactionType === 'payment_received' ? receiverName : undefined,
+          receivedByUid:
+            transactionType === 'payment_received' && (receiverName === currentUserName || receiverName === 'You')
+              ? currentUser?.uid
+              : undefined,
+          paymentMethod: transactionType !== 'expense' ? paymentMethod : undefined
+        };
+
+        if (onUpdateExpense) {
+          await onUpdateExpense(updatedExp);
+        } else {
+          await onAddExpense(updatedExp);
+        }
+        setFeedback(`Updated transaction "${updatedExp.description}"!`);
+        setModalOpen(false);
+        setEditingExpenseId(null);
+        setDescription('');
+        setAmountINR(0);
+        setTimeout(() => setFeedback(null), 3500);
+        return;
+      }
+
       const newExp: Expense = {
         id: 'exp_' + Date.now(),
         tripId: trip.id,
@@ -610,11 +676,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       setAmountINR(0);
       setTimeout(() => setFeedback(null), 3500);
     } catch (err) {
-      console.error('Failed to add transaction:', err);
+      console.error('Failed to save transaction:', err);
       // Auto close even on background warning so user isn't stuck
       setModalOpen(false);
       setDescription('');
       setAmountINR(0);
+      setEditingExpenseId(null);
     } finally {
       setSubmitting(false);
     }
@@ -1248,6 +1315,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => {
+                setEditingExpenseId(null);
+                setDescription('');
+                setAmountINR(0);
                 setTransactionType('payment_received');
                 setModalOpen(true);
               }}
@@ -1259,6 +1329,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 
             <button
               onClick={() => {
+                setEditingExpenseId(null);
+                setDescription('');
+                setAmountINR(0);
                 setTransactionType('expense');
                 setModalOpen(true);
               }}
@@ -1292,6 +1365,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             <div className="flex justify-center gap-2">
               <button
                 onClick={() => {
+                  setEditingExpenseId(null);
+                  setDescription('');
+                  setAmountINR(0);
                   setTransactionType('expense');
                   setModalOpen(true);
                 }}
@@ -1431,14 +1507,24 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                   </div>
 
                   {(isTripCreator || isTripPlanner) && (
-                    <button
-                      type="button"
-                      onClick={() => onDeleteExpense(exp.id)}
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
-                      title="Delete record"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditExpense(exp)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/30 transition-colors cursor-pointer"
+                        title="Edit transaction"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteExpense(exp.id)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                        title="Delete record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1788,6 +1874,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 >
                   {submitting
                     ? 'Saving...'
+                    : editingExpenseId
+                    ? 'Save Changes'
                     : transactionType === 'expense'
                     ? isTripPlanner
                       ? 'Record Group Expense'

@@ -71,12 +71,15 @@ import {
   removeTravellerFromTrip,
   subscribeActivities,
   addActivity,
+  updateActivity,
   deleteActivity,
   subscribeExpenses,
   addExpense,
+  updateExpense,
   deleteExpense,
   subscribeDocuments,
   addDocument,
+  updateDocument,
   deleteDocument,
   subscribePackingItems,
   togglePackingItem,
@@ -643,9 +646,23 @@ function MainContent() {
     await handleAddActivity(newAct);
   };
 
+  const handleUpdateActivity = async (act: Activity) => {
+    if (!activeTrip) return;
+    setActivities((prev) => prev.map((a) => (a.id === act.id ? act : a)));
+    triggerToast('Activity Updated', `"${act.title}" updated for Day ${act.day}.`, 'itinerary');
+    if (currentUser) {
+      try {
+        await updateActivity(activeTrip.id, act, activeTrip.title);
+      } catch (err) {
+        console.warn('Backend sync warning for activity update:', err);
+      }
+    }
+  };
+
   const handleDeleteActivity = async (actId: string) => {
     if (!activeTrip) return;
     setActivities((prev) => prev.filter((a) => a.id !== actId));
+    triggerToast('Activity Removed', 'Item removed from itinerary.', 'itinerary');
     if (currentUser) {
       try {
         await deleteActivity(activeTrip.id, actId);
@@ -674,15 +691,28 @@ function MainContent() {
     }
   };
 
-  const handleDeleteExpense = async (expId: string) => {
+  const handleUpdateExpense = async (exp: Expense) => {
     if (!activeTrip) return;
-    setExpenses((prev) => prev.filter((e) => e.id !== expId));
+    setExpenses((prev) => prev.map((e) => (e.id === exp.id ? exp : e)));
+    triggerToast('Expense Updated', `Transaction "${exp.description}" updated.`, 'expense');
     if (currentUser) {
       try {
-        await deleteExpense(activeTrip.id, expId);
+        await updateExpense(activeTrip.id, exp, activeTrip.title);
       } catch (err) {
-        console.warn('Backend delete error:', err);
+        console.warn('Backend sync warning for expense update:', err);
       }
+    }
+  };
+
+  const handleDeleteExpense = async (expId: string) => {
+    if (!activeTrip) return;
+    // Optimistically remove immediately from local state so all accounts see instant removal
+    setExpenses((prev) => prev.filter((e) => e.id !== expId));
+    triggerToast('Expense Removed', 'Transaction deleted and ledger synced.', 'expense');
+    try {
+      await deleteExpense(activeTrip.id, expId);
+    } catch (err) {
+      console.warn('Backend delete error:', err);
     }
   };
 
@@ -707,12 +737,27 @@ function MainContent() {
     }
   };
 
+  const handleUpdateDocument = async (docItem: DigitalDocument) => {
+    if (!activeTrip) return;
+    setDocuments((prev) => prev.map((d) => (d.id === docItem.id ? docItem : d)));
+    triggerToast('Document Updated', `"${docItem.title}" updated in Wallet.`, 'wallet');
+    if (currentUser) {
+      try {
+        await updateDocument(activeTrip.id, docItem, activeTrip.title);
+      } catch (err) {
+        console.warn('Backend sync warning for document update:', err);
+      }
+    }
+  };
+
   const handleDeleteDocument = async (docId: string) => {
     if (!activeTrip) return;
-    if (currentUser) {
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    triggerToast('Document Removed', 'Pass removed from wallet.', 'wallet');
+    try {
       await deleteDocument(activeTrip.id, docId);
-    } else {
-      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    } catch (err) {
+      console.warn('Backend delete error for document:', err);
     }
   };
 
@@ -1166,6 +1211,7 @@ function MainContent() {
                   trip={activeTrip}
                   activities={activities}
                   onAddActivity={handleAddActivity}
+                  onUpdateActivity={handleUpdateActivity}
                   onProposeActivity={handleAddActivity}
                   onDeleteActivity={handleDeleteActivity}
                   onOpenSuggestions={() => setSuggestionsModalOpen(true)}
@@ -1188,6 +1234,7 @@ function MainContent() {
                   trip={activeTrip}
                   expenses={expenses}
                   onAddExpense={handleAddExpense}
+                  onUpdateExpense={handleUpdateExpense}
                   onProposeExpense={handleAddExpense}
                   onDeleteExpense={handleDeleteExpense}
                   isTripCreator={isTripCreator}
@@ -1199,6 +1246,7 @@ function MainContent() {
                   trip={activeTrip}
                   documents={documents}
                   onAddDocument={handleAddDocument}
+                  onUpdateDocument={handleUpdateDocument}
                   onDeleteDocument={handleDeleteDocument}
                   isTripCreator={isTripCreator}
                 />
@@ -1343,7 +1391,7 @@ function MainContent() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 dark:border-slate-900 bg-white/90 dark:bg-slate-950/90 py-6 text-center text-xs text-slate-500 transition-colors">
+      <footer className="mt-auto border-t border-slate-200 dark:border-slate-900 bg-white/90 dark:bg-slate-950/90 py-6 pb-24 md:pb-6 text-center text-xs text-slate-500 transition-colors">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-bold text-slate-700 dark:text-slate-300">JKVoyage</span>
@@ -1480,7 +1528,7 @@ function MainContent() {
       {activeTrip && (
         <nav
           aria-label="Mobile Navigation"
-          className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 py-1 shadow-2xl transition-colors"
+          className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shadow-2xl transition-colors transform-gpu translate-y-0 will-change-transform"
         >
           <div className="grid grid-cols-6 gap-0.5 max-w-lg mx-auto">
             <button
@@ -1591,7 +1639,7 @@ function MainContent() {
       {activeTrip && (
         <aside
           aria-label="Trip Group Chat Room"
-          className="fixed bottom-16 sm:bottom-20 md:bottom-6 right-3 sm:right-6 z-40 flex flex-col items-end"
+          className="fixed bottom-18 sm:bottom-20 md:bottom-6 right-3 sm:right-6 z-40 flex flex-col items-end"
         >
           {/* Floating Corner Chat Window */}
           {chatCornerOpen && (

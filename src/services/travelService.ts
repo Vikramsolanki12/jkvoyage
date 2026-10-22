@@ -231,9 +231,9 @@ export const SEED_RAJASTHAN_PACKING: PackingItem[] = [
 export function getStoredTripActivities(tripId: string): Activity[] {
   try {
     const raw = localStorage.getItem(`jkvoyage_activities_${tripId}`);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
   if (tripId === 'trip_spiti_expedition') return SEED_SPITI_ACTIVITIES;
@@ -244,9 +244,9 @@ export function getStoredTripActivities(tripId: string): Activity[] {
 export function getStoredTripExpenses(tripId: string): Expense[] {
   try {
     const raw = localStorage.getItem(`jkvoyage_expenses_${tripId}`);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
   if (tripId === 'trip_spiti_expedition') return SEED_SPITI_EXPENSES;
@@ -257,9 +257,9 @@ export function getStoredTripExpenses(tripId: string): Expense[] {
 export function getStoredTripDocuments(tripId: string): DigitalDocument[] {
   try {
     const raw = localStorage.getItem(`jkvoyage_documents_${tripId}`);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
   if (tripId === 'trip_spiti_expedition') return SEED_SPITI_DOCS;
@@ -1224,6 +1224,33 @@ export async function addActivity(tripId: string, activity: Activity, tripTitle?
   );
 }
 
+export async function updateActivity(tripId: string, activity: Activity, tripTitle?: string): Promise<void> {
+  try {
+    const current = getStoredTripActivities(tripId);
+    const updated = current.map((a) => (a.id === activity.id ? activity : a));
+    localStorage.setItem(`jkvoyage_activities_${tripId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  const path = `trips/${tripId}/activities/${activity.id}`;
+  try {
+    const actRef = doc(db, 'trips', tripId, 'activities', activity.id);
+    await setDoc(actRef, cleanForFirestore(activity), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+
+  // Create notification
+  await generateTripNotification(
+    tripId,
+    tripTitle || 'Trip',
+    'Activity Updated',
+    `Day ${activity.day}: "${activity.title}" was updated`,
+    'itinerary',
+    'itinerary',
+    activity.createdBy
+  );
+}
+
 export async function deleteActivity(tripId: string, activityId: string): Promise<void> {
   try {
     const current = getStoredTripActivities(tripId);
@@ -1259,8 +1286,14 @@ export function subscribeExpenses(
       onData(getStoredTripExpenses(tripId));
     }
   };
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === `jkvoyage_expenses_${tripId}`) {
+      onData(getStoredTripExpenses(tripId));
+    }
+  };
   if (typeof window !== 'undefined') {
     window.addEventListener('jkvoyage_expenses_updated', handleCustomUpdate);
+    window.addEventListener('storage', handleStorage);
   }
 
   const expRef = collection(db, 'trips', tripId, 'expenses');
@@ -1269,17 +1302,17 @@ export function subscribeExpenses(
     unsub = onSnapshot(
       expRef,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const items: Expense[] = [];
-          snapshot.forEach((docSnap) => items.push(docSnap.data() as Expense));
-          items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          try {
-            localStorage.setItem(`jkvoyage_expenses_${tripId}`, JSON.stringify(items));
-          } catch (e) {}
-          onData(items);
-        } else {
-          onData(getStoredTripExpenses(tripId));
-        }
+        // When Firestore returns docs, this snapshot is the authoritative real-time state
+        const items: Expense[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Expense;
+          items.push({ ...data, id: data.id || docSnap.id });
+        });
+        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        try {
+          localStorage.setItem(`jkvoyage_expenses_${tripId}`, JSON.stringify(items));
+        } catch (e) {}
+        onData(items);
       },
       (error) => {
         console.warn('Expenses snapshot notice, using local cache:', error);
@@ -1294,6 +1327,7 @@ export function subscribeExpenses(
     activeExpenseSubscribers.get(tripId)?.delete(onData);
     if (typeof window !== 'undefined') {
       window.removeEventListener('jkvoyage_expenses_updated', handleCustomUpdate);
+      window.removeEventListener('storage', handleStorage);
     }
     unsub();
   };
@@ -1328,6 +1362,35 @@ export async function addExpense(tripId: string, expense: Expense, tripTitle?: s
   );
 }
 
+export async function updateExpense(tripId: string, expense: Expense, tripTitle?: string): Promise<void> {
+  try {
+    const current = getStoredTripExpenses(tripId);
+    const updated = current.map((e) => (e.id === expense.id ? expense : e));
+    localStorage.setItem(`jkvoyage_expenses_${tripId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  notifyExpenseSubscribers(tripId);
+
+  const path = `trips/${tripId}/expenses/${expense.id}`;
+  try {
+    const expRef = doc(db, 'trips', tripId, 'expenses', expense.id);
+    await setDoc(expRef, cleanForFirestore(expense), { merge: true });
+  } catch (err) {
+    console.warn('Expense updated locally; Firestore sync deferred:', err);
+  }
+
+  // Create notification
+  await generateTripNotification(
+    tripId,
+    tripTitle || 'Trip',
+    'Expense Updated',
+    `₹${expense.amountINR.toLocaleString('en-IN')} updated for "${expense.description}"`,
+    'expense',
+    'expenses',
+    expense.paidBy
+  );
+}
+
 export async function deleteExpense(tripId: string, expenseId: string): Promise<void> {
   try {
     const current = getStoredTripExpenses(tripId);
@@ -1353,8 +1416,15 @@ export function subscribeDocuments(
   onData: (items: DigitalDocument[]) => void
 ): Unsubscribe {
   const initial = getStoredTripDocuments(tripId);
-  if (initial.length > 0) {
-    onData(initial);
+  onData(initial);
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === `jkvoyage_documents_${tripId}`) {
+      onData(getStoredTripDocuments(tripId));
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', handleStorage);
   }
 
   const docRef = collection(db, 'trips', tripId, 'documents');
@@ -1363,16 +1433,15 @@ export function subscribeDocuments(
     unsub = onSnapshot(
       docRef,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const items: DigitalDocument[] = [];
-          snapshot.forEach((docSnap) => items.push(docSnap.data() as DigitalDocument));
-          try {
-            localStorage.setItem(`jkvoyage_documents_${tripId}`, JSON.stringify(items));
-          } catch (e) {}
-          onData(items);
-        } else {
-          onData(getStoredTripDocuments(tripId));
-        }
+        const items: DigitalDocument[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data() as DigitalDocument;
+          items.push({ ...d, id: d.id || docSnap.id });
+        });
+        try {
+          localStorage.setItem(`jkvoyage_documents_${tripId}`, JSON.stringify(items));
+        } catch (e) {}
+        onData(items);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, `trips/${tripId}/documents`);
@@ -1382,7 +1451,12 @@ export function subscribeDocuments(
   } catch (err) {
     onData(getStoredTripDocuments(tripId));
   }
-  return unsub;
+  return () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', handleStorage);
+    }
+    unsub();
+  };
 }
 
 export async function addDocument(tripId: string, documentItem: DigitalDocument, tripTitle?: string): Promise<void> {
@@ -1416,6 +1490,34 @@ export async function addDocument(tripId: string, documentItem: DigitalDocument,
       ),
       new Promise((res) => setTimeout(res, 2000))
     ]);
+  } catch (e) {}
+}
+
+export async function updateDocument(tripId: string, documentItem: DigitalDocument, tripTitle?: string): Promise<void> {
+  try {
+    const current = getStoredTripDocuments(tripId);
+    const updated = current.map((d) => (d.id === documentItem.id ? documentItem : d));
+    localStorage.setItem(`jkvoyage_documents_${tripId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  const path = `trips/${tripId}/documents/${documentItem.id}`;
+  try {
+    const docRef = doc(db, 'trips', tripId, 'documents', documentItem.id);
+    await setDoc(docRef, cleanForFirestore(documentItem), { merge: true });
+  } catch (err) {
+    console.warn('Firestore update document warning:', err);
+  }
+
+  // Create notification
+  try {
+    await generateTripNotification(
+      tripId,
+      tripTitle || 'Trip',
+      'Pass / Ticket Updated',
+      `Travel document "${documentItem.title}" was updated in Wallet`,
+      'wallet',
+      'wallet'
+    );
   } catch (e) {}
 }
 

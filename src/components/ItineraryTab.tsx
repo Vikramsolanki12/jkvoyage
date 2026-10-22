@@ -19,7 +19,10 @@ import {
   ShieldCheck,
   AlertCircle,
   X,
-  ExternalLink
+  ExternalLink,
+  Edit3,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Activity, ActivityCategory, Trip } from "../types/travel.ts";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -31,6 +34,7 @@ interface ItineraryTabProps {
   activities: Activity[];
   isTripCreator: boolean;
   onAddActivity: (activity: Activity) => Promise<void>;
+  onUpdateActivity?: (activity: Activity) => Promise<void>;
   onProposeActivity?: (activity: Activity) => Promise<void>;
   onDeleteActivity: (id: string) => Promise<void>;
   onOpenSuggestions: () => void;
@@ -41,14 +45,17 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
   activities,
   isTripCreator,
   onAddActivity,
+  onUpdateActivity,
   onProposeActivity,
   onDeleteActivity,
   onOpenSuggestions,
 }) => {
   const { currentUser } = useAuth();
-  const [selectedDay, setSelectedDay] = useState<number | "all">("all");
+  // Strictly day by day navigation (no all days)
+  const [selectedDay, setSelectedDay] = useState<number>(1);
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | "all">("all");
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -85,8 +92,10 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
   })();
 
   const daysList = Array.from({ length: tripDays }, (_, index) => index + 1);
+
+  // Strictly Day-by-Day schedule view (all days removed)
   const filteredActivities = activities.filter((act) => {
-    if (selectedDay !== "all" && act.day !== selectedDay) return false;
+    if (act.day !== selectedDay) return false;
     if (selectedCategory !== "all" && act.category !== selectedCategory) return false;
     return true;
   });
@@ -130,6 +139,18 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
     },
   };
 
+  const handleStartEditActivity = (act: Activity) => {
+    setEditingActivityId(act.id);
+    setDay(act.day);
+    setTime(act.time || '10:00');
+    setTitle(act.title);
+    setCategory(act.category || 'sightseeing');
+    setLocation(act.location || '');
+    setCostINR(act.costINR || 0);
+    setNotes(act.notes || '');
+    setModalOpen(true);
+  };
+
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -143,6 +164,37 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
         trip.destination,
         activities.length
       );
+
+      if (editingActivityId) {
+        const existing = activities.find((a) => a.id === editingActivityId);
+        const updatedActivity: Activity = {
+          ...existing,
+          id: editingActivityId,
+          tripId: trip.id,
+          day: Number(day),
+          time,
+          title: title.trim(),
+          category,
+          location: location.trim() || trip.destination,
+          costINR: Number(costINR) || 0,
+          notes: notes.trim(),
+          createdBy: existing?.createdBy || currentUser?.uid || "user_local",
+          createdAt: existing?.createdAt || new Date().toISOString(),
+          latitude: coords.latitude || existing?.latitude,
+          longitude: coords.longitude || existing?.longitude
+        };
+
+        if (onUpdateActivity) {
+          await onUpdateActivity(updatedActivity);
+        } else {
+          await onAddActivity(updatedActivity);
+        }
+        setFeedback(`Updated "${updatedActivity.title}"!`);
+        setModalOpen(false);
+        setEditingActivityId(null);
+        setTimeout(() => setFeedback(null), 5000);
+        return;
+      }
 
       const newActivity: Activity = {
         id: "act_" + Date.now(),
@@ -177,11 +229,12 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
       setNotes("");
       setTimeout(() => setFeedback(null), 5000);
     } catch (err) {
-      console.error("Failed to create activity:", err);
+      console.error("Failed to save activity:", err);
       setModalOpen(false);
       setTitle("");
       setLocation("");
       setCostINR(0);
+      setEditingActivityId(null);
     } finally {
       setSubmitting(false);
     }
@@ -222,38 +275,62 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
         </div>
       )}
 
-      {/* View Switcher & Filters Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-        {/* Left: Day selection tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto pb-1 md:pb-0">
+      {/* Day by Day Switcher Bar (All Days removed) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-slate-900/60 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+        {/* Left: Day Stepper & Day Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
           <button
-            onClick={() => setSelectedDay("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-              selectedDay === "all"
-                ? "bg-sky-500 text-slate-950 font-black shadow-sm"
-                : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-            }`}
+            type="button"
+            disabled={selectedDay <= 1}
+            onClick={() => setSelectedDay((prev) => Math.max(1, prev - 1))}
+            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
+            title="Previous Day"
           >
-            All Days ({activities.length})
+            <ChevronLeft className="w-4 h-4" />
           </button>
-          {daysList.map((d) => (
-            <button
-              key={d}
-              onClick={() => setSelectedDay(d)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                selectedDay === d
-                  ? "bg-sky-500 text-slate-950 font-black shadow-sm"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-              }`}
-            >
-              Day {d}
-            </button>
-          ))}
+
+          {daysList.map((d) => {
+            const countForDay = activities.filter((a) => a.day === d).length;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelectedDay(d)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedDay === d
+                    ? "bg-sky-500 text-slate-950 font-black shadow-md shadow-sky-500/25 scale-[1.02]"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                <span>Day {d}</span>
+                {countForDay > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      selectedDay === d
+                        ? "bg-slate-950/20 text-slate-950 font-black"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                    }`}
+                  >
+                    {countForDay}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            disabled={selectedDay >= tripDays}
+            onClick={() => setSelectedDay((prev) => Math.min(tripDays, prev + 1))}
+            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
+            title="Next Day"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Right: View mode toggle & Action Buttons */}
-        {/* Right: Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+        {/* Right: Suggested Places & Add Activity */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             onClick={onOpenSuggestions}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/30 transition-colors cursor-pointer"
@@ -263,7 +340,16 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
           </button>
 
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              setEditingActivityId(null);
+              setDay(selectedDay);
+              setTitle("");
+              setLocation("");
+              setCostINR(0);
+              setNotes("");
+              setTime("10:00");
+              setModalOpen(true);
+            }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -392,14 +478,24 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
                         </button>
 
                         {isTripCreator && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteActivity(act.id)}
-                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                            title="Remove activity"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditActivity(act)}
+                              className="p-1.5 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/30 transition-colors cursor-pointer"
+                              title="Edit activity"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteActivity(act.id)}
+                              className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                              title="Remove activity"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -467,11 +563,23 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
             </button>
 
             <h3 className="text-base sm:text-lg font-black mb-1 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-sky-500" />
-              <span>{isTripCreator ? "Schedule Itinerary Activity" : "Propose Itinerary Activity"}</span>
+              {editingActivityId ? (
+                <Edit3 className="w-5 h-5 text-sky-500" />
+              ) : (
+                <Plus className="w-5 h-5 text-sky-500" />
+              )}
+              <span>
+                {editingActivityId
+                  ? "Edit Scheduled Activity"
+                  : isTripCreator
+                  ? "Schedule Itinerary Activity"
+                  : "Propose Itinerary Activity"}
+              </span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              {isTripCreator
+              {editingActivityId
+                ? "Update activity details, timing, notes, or estimated cost."
+                : isTripCreator
                 ? "This activity will be directly scheduled in your journey timeline."
                 : "As a collaborator, this proposal will be sent to the trip planner for confirmation."}
             </p>
@@ -648,6 +756,8 @@ export const ItineraryTab: React.FC<ItineraryTabProps> = ({
                 >
                   {submitting
                     ? "Saving..."
+                    : editingActivityId
+                    ? "Save Changes"
                     : isTripCreator
                     ? "Save to Itinerary"
                     : "Submit Request to Planner"}

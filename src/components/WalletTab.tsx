@@ -21,7 +21,8 @@ import {
   ExternalLink,
   Maximize2,
   Camera,
-  Loader2
+  Loader2,
+  Edit3
 } from 'lucide-react';
 import { DigitalDocument, DocumentType, Trip } from '../types/travel.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -32,6 +33,7 @@ interface WalletTabProps {
   documents: DigitalDocument[];
   isTripCreator: boolean;
   onAddDocument: (docItem: DigitalDocument) => Promise<void>;
+  onUpdateDocument?: (docItem: DigitalDocument) => Promise<void>;
   onProposeDocument?: (docItem: DigitalDocument) => Promise<void>;
   onDeleteDocument: (id: string) => Promise<void>;
 }
@@ -41,11 +43,13 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   documents,
   isTripCreator,
   onAddDocument,
+  onUpdateDocument,
   onProposeDocument,
   onDeleteDocument
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [processingFile, setProcessingFile] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -175,6 +179,21 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     }
   };
 
+  const handleStartEditDocument = (docItem: DigitalDocument) => {
+    setEditingDocId(docItem.id);
+    setTitle(docItem.title);
+    setDocType(docItem.docType);
+    setDocNumber(docItem.docNumber || '');
+    setExpiryDate(docItem.expiryDate || '');
+    setNotes(docItem.notes || '');
+    setFileUrlInput(docItem.fileUrl || '');
+    setFileName(docItem.fileName || '');
+    setFileType(docItem.fileType || 'other');
+    setFileSize(docItem.fileSize || '');
+    setFileData(null);
+    setModalOpen(true);
+  };
+
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -208,6 +227,51 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         } catch (uploadErr) {
           console.warn('Private cloud upload fallback to local preview:', uploadErr);
         }
+      }
+
+      if (editingDocId) {
+        const existing = documents.find((d) => d.id === editingDocId);
+        const updatedDoc: DigitalDocument = {
+          ...existing,
+          id: editingDocId,
+          tripId: trip.id,
+          title: title.trim(),
+          docType,
+          docNumber: docNumber.trim() || '',
+          expiryDate: expiryDate.trim() || '',
+          notes: notes.trim() || '',
+          fileUrl: finalUrl || existing?.fileUrl || '',
+          fileName: fileName || (finalUrl ? 'ticket_attachment' : existing?.fileName || ''),
+          fileType: detectedType || existing?.fileType || 'other',
+          fileSize: fileSize || existing?.fileSize || '',
+          ownerId: existing?.ownerId || effectiveOwnerId,
+          createdAt: existing?.createdAt || new Date().toISOString()
+        };
+
+        // Close modal and reset form immediately so UI never blocks
+        setModalOpen(false);
+        setEditingDocId(null);
+        setTitle('');
+        setDocNumber('');
+        setExpiryDate('');
+        setNotes('');
+        setFileData(null);
+        setFileName('');
+        setFileUrlInput('');
+        setFileSize('');
+        setUploadWarning(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+        setFeedback(`Updated "${updatedDoc.title}" in wallet!`);
+        setTimeout(() => setFeedback(null), 3500);
+
+        if (onUpdateDocument) {
+          await onUpdateDocument(updatedDoc);
+        } else if (onAddDocument) {
+          await onAddDocument(updatedDoc);
+        }
+        return;
       }
 
       const newDoc: DigitalDocument = {
@@ -250,7 +314,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         await onProposeDocument(newDoc);
       }
     } catch (err: any) {
-      console.error('Failed to add document:', err);
+      console.error('Failed to save document:', err);
       setErrorMessage(err?.message || 'Failed to save document. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
@@ -306,6 +370,15 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         {isTripCreator ? (
           <button
             onClick={() => {
+              setEditingDocId(null);
+              setTitle('');
+              setDocNumber('');
+              setExpiryDate('');
+              setNotes('');
+              setFileData(null);
+              setFileName('');
+              setFileUrlInput('');
+              setFileSize('');
               setDocType('ticket');
               setModalOpen(true);
             }}
@@ -323,6 +396,15 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             <button
               type="button"
               onClick={() => {
+                setEditingDocId(null);
+                setTitle('');
+                setDocNumber('');
+                setExpiryDate('');
+                setNotes('');
+                setFileData(null);
+                setFileName('');
+                setFileUrlInput('');
+                setFileSize('');
                 setDocType('id_card');
                 setModalOpen(true);
               }}
@@ -461,14 +543,24 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                       )}
 
                       {isTripCreator && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteDocument(doc.id)}
-                          className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
-                          title="Delete pass"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditDocument(doc)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/30 transition-colors cursor-pointer"
+                            title="Edit pass details"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteDocument(doc.id)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                            title="Delete pass"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -545,11 +637,23 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl text-slate-900 dark:text-slate-100 max-h-[92vh] overflow-y-auto">
             <h3 className="text-base sm:text-lg font-black mb-1 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-sky-500" />
-              <span>{isTripCreator ? "Add Ticket, Booking or Pass" : "Upload Personal ID or Travel Document"}</span>
+              {editingDocId ? (
+                <Edit3 className="w-5 h-5 text-sky-500" />
+              ) : (
+                <Plus className="w-5 h-5 text-sky-500" />
+              )}
+              <span>
+                {editingDocId
+                  ? "Edit Travel Pass / Document"
+                  : isTripCreator
+                  ? "Add Ticket, Booking or Pass"
+                  : "Upload Personal ID or Travel Document"}
+              </span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              {isTripCreator
+              {editingDocId
+                ? "Update reference numbers, document title, attachments or travel notes."
+                : isTripCreator
                 ? "Upload your flight tickets, train PNR PDFs, hotel confirmation slips, or insurance cards."
                 : "Upload your personal passport, national ID card, visa, or travel insurance policy."}
             </p>
@@ -789,7 +893,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   disabled={submitting}
                   className="px-5 py-2 rounded-xl text-xs font-black bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-50 transition-colors shadow-md shadow-sky-500/20 cursor-pointer"
                 >
-                  {submitting ? 'Saving...' : 'Save to Wallet'}
+                  {submitting ? 'Saving...' : editingDocId ? 'Save Changes' : 'Save to Wallet'}
                 </button>
               </div>
             </form>

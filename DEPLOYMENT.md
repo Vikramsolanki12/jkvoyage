@@ -81,6 +81,12 @@ npx wrangler deploy
 *Note: `wrangler.toml` has `not_found_handling = "single-page-application"` preconfigured, which natively routes all deep links to `index.html` without causing infinite redirect loops (`code: 100324`).*
 
 ### Cloudflare Troubleshooting:
+- **"Error 1101: Worker threw exception"**:
+  - **Cause**: Occurred when `wrangler.toml` had `main = "src/worker.ts"` and `[assets]` without `binding = "ASSETS"`. Without the binding declaration, Cloudflare did not populate `env.ASSETS`, so invoking `env.ASSETS.fetch(request)` threw an unhandled `TypeError` at runtime.
+  - **Fix**: 
+    1. Added `binding = "ASSETS"` and `run_worker_first = true` to `[assets]` in `wrangler.toml`.
+    2. Wrapped `src/worker.ts` in a top-level error boundary with null checks on `env?.ASSETS?.fetch`.
+    3. Re-run `npm run build && npx wrangler deploy`.
 - **"Variables cannot be added to a Worker that only has static assets"**:
   - **Cause**: In Cloudflare Workers, an asset-only Worker (one with `[assets]` in `wrangler.toml` but without a `main` script entry) does not allow adding environment variables or secrets in the Cloudflare dashboard.
   - **Fix**: The repository includes `main = "src/worker.ts"` alongside `[assets]` in `wrangler.toml`. With `src/worker.ts` enabled as the edge router, Cloudflare recognizes the worker script and enables the **Variables and Secrets** settings tab! You can now add `GEMINI_API_KEY` and `VITE_GOOGLE_PLACES_API_KEY` in the Cloudflare Dashboard under **Workers & Pages > jkvoyage > Settings > Variables and Secrets**.

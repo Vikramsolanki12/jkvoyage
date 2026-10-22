@@ -1,5 +1,5 @@
 export interface Env {
-  ASSETS: { fetch: (request: Request | string) => Promise<Response> };
+  ASSETS?: { fetch: (request: Request | string) => Promise<Response> };
   GEMINI_API_KEY?: string;
   VITE_GEMINI_API_KEY?: string;
   GOOGLE_PLACES_API_KEY?: string;
@@ -8,7 +8,8 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
     // 1. Runtime Config Endpoint (Safe public configuration)
     if (url.pathname === '/api/config') {
@@ -100,7 +101,31 @@ Provide practical, well-formatted, actionable advice with local insider tips, tr
       }
     }
 
-    // 3. Fallback: Serve static SPA assets from ./dist (HTML, JS, CSS, images)
-    return env.ASSETS.fetch(request);
+      // 3. Fallback: Serve static SPA assets from ./dist (HTML, JS, CSS, images)
+      if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        return await env.ASSETS.fetch(request);
+      }
+
+      // If env.ASSETS is unavailable or not bound, return clean HTML fallback
+      return new Response(
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>JKVoyage</title></head><body><div id="root">Loading JKVoyage...</div></body></html>',
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        }
+      );
+    } catch (globalErr: any) {
+      console.error('Cloudflare Worker edge exception caught:', globalErr);
+      return new Response(
+        JSON.stringify({
+          error: 'Worker Execution Notice',
+          message: globalErr?.message || String(globalErr),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
   },
 };

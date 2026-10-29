@@ -102,8 +102,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           ))))
   );
   const currentUserName = userProfile?.displayName || currentUser?.displayName || 'You';
-  // For Trip Planner: filter to 'all' or by specific traveller. For Traveller: strictly their own expenses!
+  // For Trip Planner: filter to 'all' or by specific traveller. For Traveller: toggle between 'all' and 'mine'
   const [plannerFilter, setPlannerFilter] = useState<string>('all');
+  const [travellerLedgerFilter, setTravellerLedgerFilter] = useState<'all' | 'mine'>('all');
 
   // Form states
   const [transactionType, setTransactionType] = useState<ExpenseTransactionType>('expense');
@@ -133,101 +134,117 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const [newTravelerName, setNewTravelerName] = useState('');
   const [showAddTraveler, setShowAddTraveler] = useState(false);
 
-  // Helper to determine if a name string represents the current logged in user
-  const isMyTravelerName = React.useCallback((name?: string): boolean => {
-    if (!name) return false;
-    const n = name.trim().toLowerCase();
-    if (n === 'you' || n === 'me' || n === 'myself') return true;
+  // Helper to determine if a name or UID represents the current logged in user
+  const isMyTravelerName = React.useCallback(
+    (name?: string, uid?: string): boolean => {
+      if (uid && currentUser?.uid && uid === currentUser.uid) return true;
+      if (!name) return false;
+      const n = name.trim().toLowerCase();
+      if (n === 'you' || n === 'me' || n === 'myself') return true;
 
-    const myProfileName = (userProfile?.displayName || '').trim().toLowerCase();
-    const myAuthName = (currentUser?.displayName || '').trim().toLowerCase();
-    const myEmail = (currentUser?.email || '').trim().toLowerCase();
-    const emailPrefix = myEmail ? myEmail.split('@')[0] : '';
+      const myProfileName = (userProfile?.displayName || '').trim().toLowerCase();
+      const myAuthName = (currentUser?.displayName || '').trim().toLowerCase();
+      const myEmail = (currentUser?.email || '').trim().toLowerCase();
+      const emailPrefix = myEmail ? myEmail.split('@')[0].toLowerCase() : '';
+      const myUid = (currentUser?.uid || '').toLowerCase();
 
-    if (myProfileName && n === myProfileName) return true;
-    if (myAuthName && n === myAuthName) return true;
-    if (myEmail && n === myEmail) return true;
-    if (emailPrefix && n === emailPrefix) return true;
+      if (myUid && (n === myUid || name === currentUser?.uid)) return true;
+      if (myProfileName && n === myProfileName) return true;
+      if (myAuthName && n === myAuthName) return true;
+      if (myEmail && n === myEmail) return true;
+      if (emailPrefix && n === emailPrefix) return true;
 
-    if (currentUser?.uid && (n === currentUser.uid.toLowerCase() || name === currentUser.uid)) return true;
+      // Word / first-name matching (e.g. "Vikram" matches "Vikram Solanki")
+      if (myProfileName) {
+        const parts = myProfileName.split(/\s+/).filter((p) => p.length >= 2);
+        if (parts.includes(n) || (n.length >= 3 && myProfileName.includes(n))) return true;
+        if (n.split(/\s+/).some((p) => p.length >= 3 && myProfileName.includes(p))) return true;
+      }
+      if (myAuthName) {
+        const parts = myAuthName.split(/\s+/).filter((p) => p.length >= 2);
+        if (parts.includes(n) || (n.length >= 3 && myAuthName.includes(n))) return true;
+      }
 
-    // Check if any collaborator matching the user's email or uid had this name
-    if (Array.isArray(trip.collaborators)) {
-      const myCollab = trip.collaborators.find(
-        (c) => (myEmail && c.email?.trim().toLowerCase() === myEmail) || (currentUser?.uid && c.uid === currentUser.uid)
-      );
-      if (myCollab?.name && n === myCollab.name.trim().toLowerCase()) return true;
-      if (myCollab?.email && n === myCollab.email.trim().toLowerCase()) return true;
-      if (myCollab?.uid && (n === myCollab.uid.toLowerCase() || name === myCollab.uid)) return true;
-    }
+      // Check against trip collaborators
+      if (Array.isArray(trip.collaborators)) {
+        const myCollab = trip.collaborators.find(
+          (c) =>
+            (myEmail && c.email?.trim().toLowerCase() === myEmail) ||
+            (currentUser?.uid && c.uid === currentUser.uid)
+        );
+        if (myCollab) {
+          const cName = (myCollab.name || '').trim().toLowerCase();
+          const cEmail = (myCollab.email || '').trim().toLowerCase();
+          const cUid = (myCollab.uid || '').toLowerCase();
+          if (cName && n === cName) return true;
+          if (cEmail && (n === cEmail || n === cEmail.split('@')[0])) return true;
+          if (cUid && n === cUid) return true;
+          if (cName) {
+            const parts = cName.split(/\s+/).filter((p) => p.length >= 2);
+            if (parts.includes(n) || (n.length >= 3 && cName.includes(n))) return true;
+          }
+        }
+      }
 
-    return false;
-  }, [currentUser, userProfile, trip.collaborators]);
+      return false;
+    },
+    [currentUser, userProfile, trip.collaborators]
+  );
 
   // Dynamically resolve actual trip members without duplicate or conflicting names
   const activeTravelers = React.useMemo(() => {
-    const travelersMap = new Map<string, string>(); // lowercase clean identifier -> display name
-    const myEmail = currentUser?.email?.trim().toLowerCase();
+    const list: string[] = [];
+    const addName = (raw?: string) => {
+      if (!raw) return;
+      const clean = raw.trim();
+      if (!clean) return;
+      const lower = clean.toLowerCase();
+      if (lower === 'all' || lower === 'everyone' || lower === 'you') return;
+      if (!list.some((existing) => existing.toLowerCase() === lower)) {
+        list.push(clean);
+      }
+    };
+
     const myName = (userProfile?.displayName || currentUser?.displayName || '').trim();
-    const ownerEmail = (trip.ownerEmail || (trip.collaborators || []).find((c) => c.uid === trip.ownerId || c.role === 'planner')?.email || '').trim().toLowerCase();
+    const myEmail = currentUser?.email?.trim().toLowerCase();
     const ownerName = trip.ownerName?.trim() || 'Trip Planner';
 
     // 1. Owner / Trip Planner
-    travelersMap.set(ownerName.toLowerCase(), ownerName);
-    if (ownerEmail) {
-      travelersMap.set(ownerEmail, ownerName);
-    }
-    if (trip.ownerId) {
-      travelersMap.set(trip.ownerId, ownerName);
-    }
+    addName(ownerName);
 
-    // 2. Collaborators (Deduplicated so registered user with same email is only ONE)
-    const seenEmails = new Set<string>();
-    const seenUids = new Set<string>();
-    if (ownerEmail) seenEmails.add(ownerEmail);
-    if (trip.ownerId) seenUids.add(trip.ownerId);
-
+    // 2. Collaborators
     (trip.collaborators || []).forEach((c) => {
       if (!c) return;
-      const cEmail = c.email?.trim().toLowerCase();
-      const cUid = c.uid?.trim();
-      if (cUid && seenUids.has(cUid)) return;
-      if (cEmail && seenEmails.has(cEmail)) return;
-      if (c.role === 'planner') return;
-
-      if (cEmail) seenEmails.add(cEmail);
-      if (cUid) seenUids.add(cUid);
-
-      // Is this collaborator the logged-in user?
-      const isMe = (cEmail && myEmail && cEmail === myEmail) || (currentUser?.uid && cUid === currentUser.uid);
-      const displayName = isMe ? (myName || c.name) : c.name;
-      if (displayName && displayName.trim().toLowerCase() !== 'you') {
-        const cleanName = displayName.trim();
-        travelersMap.set(cleanName.toLowerCase(), cleanName);
-        if (cEmail) travelersMap.set(cEmail, cleanName);
-        if (cUid) travelersMap.set(cUid, cleanName);
-      }
+      if (c.name) addName(c.name);
     });
 
-    // 3. Current user (if not owner and not added yet)
-    if (myName && (!ownerEmail || myEmail !== ownerEmail) && currentUser?.uid !== trip.ownerId) {
-      if (!travelersMap.has(myName.toLowerCase()) && (!myEmail || !travelersMap.has(myEmail))) {
-        travelersMap.set(myName.toLowerCase(), myName);
-      }
+    // 3. Current user (if has a display name or email prefix)
+    if (myName) {
+      addName(myName);
+    } else if (myEmail) {
+      addName(myEmail.split('@')[0]);
     }
 
-    // 4. Any custom extra travelers
-    extraTravelers.forEach((extra) => {
-      const clean = extra.trim();
-      if (clean && !travelersMap.has(clean.toLowerCase())) {
-        travelersMap.set(clean.toLowerCase(), clean);
-      }
-    });
+    // 4. Any participants found in recorded expenses
+    if (Array.isArray(expenses)) {
+      expenses.forEach((e) => {
+        if (e.paidBy) addName(e.paidBy);
+        if (e.receivedBy) addName(e.receivedBy);
+        if (e.splitTargetUser) addName(e.splitTargetUser);
+        if (Array.isArray(e.splitWithUsers)) {
+          e.splitWithUsers.forEach(addName);
+        }
+        if (Array.isArray(e.splits)) {
+          e.splits.forEach((s) => addName(s.userName));
+        }
+      });
+    }
 
-    // Extract unique display names only
-    const uniqueNames = Array.from(new Set(Array.from(travelersMap.values())));
-    return uniqueNames.length > 0 ? uniqueNames : [myName || 'You'];
-  }, [trip, userProfile, currentUser, extraTravelers]);
+    // 5. Any custom extra travelers
+    extraTravelers.forEach(addName);
+
+    return list.length > 0 ? list : [ownerName, myName || 'You'];
+  }, [trip, userProfile, currentUser, expenses, extraTravelers]);
 
   // Keep singleTargetUser and customSelectedUsers in sync with valid travelers
   React.useEffect(() => {
@@ -400,7 +417,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   }, [currentUser, isMyTravelerName, getTravellerShare]);
 
   // For Trip Planner: Show all travellers' expenses! Can filter by individual traveller or view 'all'
-  // For Traveller: Strictly show ONLY their own expenses and transactions
+  // For Traveller: Show all group transactions or filter to personal transactions via travellerLedgerFilter
   const visibleExpenses = expenses.filter((exp) => {
     if (isTripPlanner) {
       if (plannerFilter === 'all') {
@@ -412,6 +429,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       const splitTarget = (exp.splitTargetUser || '').trim().toLowerCase();
       const inCustom = Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => u.trim().toLowerCase() === target);
       return payer === target || receiver === target || splitTarget === target || inCustom;
+    }
+    if (travellerLedgerFilter === 'all') {
+      return true;
     }
     return isMyOwnExpense(exp);
   });
@@ -443,8 +463,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 
   const myTotalContribution = myPaidExpenses + myPaymentsMade;
 
-  // For Traveller: Sum strictly their own expense shares across visible expenses (e.g. 200 INR of 1000 INR)
-  const myTotalExpenseShare = visibleExpenses
+  // For Traveller: Sum strictly their own expense shares across all trip expenses (e.g. 200 INR of 1000 INR)
+  const myTotalExpenseShare = expenses
     .filter((e) => !e.transactionType || e.transactionType === 'expense')
     .reduce((sum, e) => sum + getTravellerShare(e), 0);
 
@@ -452,7 +472,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   // For Trip Planner: total spent across all group expenses
   // For Traveller: strictly their personal share of expenses
   const totalSpent = isTripPlanner
-    ? visibleExpenses
+    ? expenses
         .filter((e) => !e.transactionType || e.transactionType === 'expense')
         .reduce((sum, e) => sum + (e.amountINR || 0), 0)
     : myTotalExpenseShare;
@@ -701,52 +721,73 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     memberBalances[t] = { paid: 0, owes: 0, received: 0 };
   });
 
-  const myCanonicalMember = activeTravelers.find(isMyTravelerName) || currentUserName;
+  const myCanonicalMember = activeTravelers.find((t) => isMyTravelerName(t)) || currentUserName;
   if (!memberBalances[myCanonicalMember]) {
     memberBalances[myCanonicalMember] = { paid: 0, owes: 0, received: 0 };
   }
 
-  if (isTripPlanner) {
-    expenses.forEach((exp) => {
-      const rawPayer = exp.paidBy || currentUserName;
-      const payer = isMyTravelerName(rawPayer) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
-      if (!memberBalances[payer]) {
-        memberBalances[payer] = { paid: 0, owes: 0, received: 0 };
-      }
+  // Calculate balances across all expenses uniformly for every traveller and planner:
+  expenses.forEach((exp) => {
+    const rawPayer = exp.paidBy || currentUserName;
+    const payer = isMyTravelerName(rawPayer, exp.paidByUid)
+      ? myCanonicalMember
+      : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
+    if (!memberBalances[payer]) {
+      memberBalances[payer] = { paid: 0, owes: 0, received: 0 };
+    }
 
-      // Payment Received by traveller
-      if (exp.transactionType === 'payment_received') {
-        const rawReceiver = exp.receivedBy || currentUserName;
-        const receiver = isMyTravelerName(rawReceiver) ? myCanonicalMember : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
-        if (!memberBalances[receiver]) {
-          memberBalances[receiver] = { paid: 0, owes: 0, received: 0 };
-        }
-        // Payer transferred money to receiver (settlement)
-        memberBalances[payer].paid += exp.amountINR;
-        memberBalances[receiver].received += exp.amountINR;
-        return;
+    // Payment Received by traveller (Settlement transfer)
+    if (exp.transactionType === 'payment_received') {
+      const rawReceiver = exp.receivedBy || currentUserName;
+      const receiver = isMyTravelerName(rawReceiver, exp.receivedByUid)
+        ? myCanonicalMember
+        : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
+      if (!memberBalances[receiver]) {
+        memberBalances[receiver] = { paid: 0, owes: 0, received: 0 };
       }
-
-      // Deposit added to group pool
-      if (exp.transactionType === 'deposit') {
-        memberBalances[payer].paid += exp.amountINR;
-        return;
-      }
-
-      // Regular expense
+      // Payer transferred money to receiver (settlement)
       memberBalances[payer].paid += exp.amountINR;
+      memberBalances[receiver].received += exp.amountINR;
+      return;
+    }
 
-      if (exp.splitMode === 'single' && exp.splitTargetUser) {
-        const rawDebtor = exp.splitTargetUser;
-        const debtor = isMyTravelerName(rawDebtor) ? myCanonicalMember : rawDebtor;
-        if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
-        memberBalances[debtor].owes += exp.amountINR;
-      } else if (exp.splitMode === 'custom' && exp.splitWithUsers && exp.splitWithUsers.length > 0) {
+    // Deposit added to group pool
+    if (exp.transactionType === 'deposit') {
+      memberBalances[payer].paid += exp.amountINR;
+      return;
+    }
+
+    // Regular expense: Payer paid full bill
+    memberBalances[payer].paid += exp.amountINR;
+
+    // Allocate owed split share to participating members:
+    if (exp.splitMode === 'single' && exp.splitTargetUser) {
+      const rawDebtor = exp.splitTargetUser;
+      const debtor = isMyTravelerName(rawDebtor) ? myCanonicalMember : rawDebtor;
+      if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
+      memberBalances[debtor].owes += exp.amountINR;
+    } else if (exp.splitMode === 'custom') {
+      if (Array.isArray(exp.splits) && exp.splits.length > 0) {
+        exp.splits.forEach((split) => {
+          const debtor = isMyTravelerName(split.userName, split.userId) ? myCanonicalMember : split.userName;
+          if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
+          memberBalances[debtor].owes += Math.round(split.amount);
+        });
+      } else if (Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
         const share = exp.amountINR / exp.splitWithUsers.length;
         exp.splitWithUsers.forEach((user) => {
           const debtor = isMyTravelerName(user) ? myCanonicalMember : user;
           if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
           memberBalances[debtor].owes += share;
+        });
+      }
+    } else {
+      // splitMode === 'all' or default
+      if (Array.isArray(exp.splits) && exp.splits.length > 0) {
+        exp.splits.forEach((split) => {
+          const debtor = isMyTravelerName(split.userName, split.userId) ? myCanonicalMember : split.userName;
+          if (!memberBalances[debtor]) memberBalances[debtor] = { paid: 0, owes: 0, received: 0 };
+          memberBalances[debtor].owes += Math.round(split.amount);
         });
       } else {
         const share = exp.amountINR / Math.max(1, activeTravelers.length);
@@ -755,62 +796,28 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           memberBalances[t].owes += share;
         });
       }
-    });
-  } else {
-    // For Traveller: Strictly calculate only their own individual paid amounts and their allocated expense share
-    // (e.g. 1000 INR expense distributed across 5 travellers = strictly 200 INR owed share)
-    expenses.forEach((exp) => {
-      const rawPayer = exp.paidBy || currentUserName;
-      const isPayerMe = isMyTravelerName(rawPayer) || exp.paidByUid === currentUser?.uid || exp.createdBy === currentUser?.uid;
-
-      if (exp.transactionType === 'payment_received') {
-        const rawReceiver = exp.receivedBy || currentUserName;
-        const isReceiverMe = isMyTravelerName(rawReceiver) || exp.receivedByUid === currentUser?.uid;
-        if (isPayerMe) {
-          memberBalances[myCanonicalMember].paid += exp.amountINR;
-        }
-        if (isReceiverMe) {
-          memberBalances[myCanonicalMember].received += exp.amountINR;
-        }
-        return;
-      }
-
-      if (exp.transactionType === 'deposit') {
-        if (isPayerMe) {
-          memberBalances[myCanonicalMember].paid += exp.amountINR;
-        }
-        return;
-      }
-
-      // Regular expense:
-      if (isPayerMe) {
-        memberBalances[myCanonicalMember].paid += exp.amountINR;
-      }
-
-      // The traveller's allocated share of this expense (e.g. 200 INR of 1000 INR across 5 travellers)
-      const myShare = getTravellerShare(exp);
-      memberBalances[myCanonicalMember].owes += myShare;
-    });
-  }
+    }
+  });
 
   // Helper to get detailed breakdown of an expense for a specific member
   const getMemberTransactionDetails = React.useCallback(
     (memberName: string, exp: Expense) => {
-      const isTargetMember = (name?: string) => {
+      const isTargetMember = (name?: string, uid?: string) => {
+        if (uid && currentUser?.uid && uid === currentUser.uid && isMyTravelerName(memberName)) return true;
         if (!name) return false;
         if (name.trim().toLowerCase() === memberName.trim().toLowerCase()) return true;
-        if (isMyTravelerName(memberName) && isMyTravelerName(name)) return true;
+        if (isMyTravelerName(memberName) && isMyTravelerName(name, uid)) return true;
         return false;
       };
 
       const isPayer =
-        isTargetMember(exp.paidBy) ||
+        isTargetMember(exp.paidBy, exp.paidByUid) ||
         (isMyTravelerName(memberName) && (exp.paidByUid === currentUser?.uid || exp.createdBy === currentUser?.uid));
 
       // Handle Settlement / Payment Received
       if (exp.transactionType === 'payment_received') {
         const isReceiver =
-          isTargetMember(exp.receivedBy) ||
+          isTargetMember(exp.receivedBy, exp.receivedByUid) ||
           (isMyTravelerName(memberName) && exp.receivedByUid === currentUser?.uid);
 
         if (isPayer) {
@@ -886,13 +893,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         }
       } else if (exp.splitMode === 'custom') {
         if (Array.isArray(exp.splits) && exp.splits.length > 0) {
-          const s = exp.splits.find((split) => isTargetMember(split.userName));
+          const s = exp.splits.find((split) => isTargetMember(split.userName, split.userId));
           if (s) {
             memberShare = Math.round(s.amount);
             inSplit = true;
           }
         } else if (Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.length > 0) {
-          if (exp.splitWithUsers.some(isTargetMember)) {
+          if (exp.splitWithUsers.some((u) => isTargetMember(u))) {
             memberShare = Math.round(exp.amountINR / exp.splitWithUsers.length);
             inSplit = true;
           }
@@ -900,9 +907,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       } else {
         // splitMode === 'all' or default
         if (Array.isArray(exp.splits) && exp.splits.length > 0) {
-          const s = exp.splits.find((split) => isTargetMember(split.userName));
+          const s = exp.splits.find((split) => isTargetMember(split.userName, split.userId));
           if (s) {
             memberShare = Math.round(s.amount);
+            inSplit = true;
+          } else {
+            // Equal share across group for all-member split
+            memberShare = Math.round(exp.amountINR / Math.max(1, exp.splits.length || activeTravelers.length));
             inSplit = true;
           }
         } else {
@@ -1405,12 +1416,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           <div>
             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
               <HandCoins className="w-4 h-4 text-sky-500" />
-              <span>{isTripPlanner ? '👑 All Traveler Balances & Settlements' : '🧭 My Personal Balance & Fair-Share Summary'}</span>
+              <span>{isTripPlanner ? '👑 All Traveler Balances & Settlements' : '🧭 All Traveler Balances & Your Fair-Share'}</span>
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
               {isTripPlanner
                 ? `Net balance and breakdown for all ${activeTravelers.length} members in this journey.`
-                : 'Your individual expenditure, calculated fair-share, and net settlement status.'}
+                : `Net balance, paid contributions, and shares for all ${activeTravelers.length} members in this journey.`}
             </p>
           </div>
 
@@ -1461,21 +1472,26 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {(isTripPlanner
             ? activeTravelers.filter((member) => (plannerFilter === 'all' || member === plannerFilter))
-            : [myCanonicalMember]
+            : [...activeTravelers].sort((a, b) => (isMyTravelerName(a) ? -1 : isMyTravelerName(b) ? 1 : 0))
           ).map((member) => {
-              const b = memberBalances[member] || { paid: myPaidExpenses, owes: myPaidExpenses, received: myPaymentsReceived };
+              const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
               const net = b.paid - b.owes - b.received;
               const isExtra = extraTravelers.includes(member);
+              const isMe = isMyTravelerName(member);
               return (
                 <div
                   key={member}
-                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 space-y-1.5 relative group"
+                  className={`p-3.5 rounded-xl border bg-slate-50/70 dark:bg-slate-950/50 space-y-1.5 relative group ${
+                    isMe
+                      ? 'border-sky-400/80 dark:border-sky-500/60 ring-1 ring-sky-400/20'
+                      : 'border-slate-200 dark:border-slate-800'
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
                       <User className="w-3.5 h-3.5 text-slate-400" />
                       <span>{member}</span>
-                      {isMyTravelerName(member) && (
+                      {isMe && (
                         <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
                           You
                         </span>
@@ -1513,22 +1529,20 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       <span>Received: ₹{Math.round(b.received)}</span>
                     </div>
                   )}
-                  {isTripPlanner && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedHistoryTraveller(member);
-                        setActiveView('travellers');
-                      }}
-                      className="w-full mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center justify-between group-hover:text-sky-500 cursor-pointer transition-colors"
-                    >
-                      <span className="flex items-center gap-1">
-                        <History className="w-3 h-3" />
-                        <span>View History ({getMemberTransactionCount(member)})</span>
-                      </span>
-                      <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedHistoryTraveller(member);
+                      setActiveView('travellers');
+                    }}
+                    className="w-full mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center justify-between group-hover:text-sky-500 cursor-pointer transition-colors"
+                  >
+                    <span className="flex items-center gap-1">
+                      <History className="w-3 h-3" />
+                      <span>View History ({getMemberTransactionCount(member)})</span>
+                    </span>
+                    <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
                 </div>
               );
             })}
@@ -1544,7 +1558,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div>
           <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <span>{isTripPlanner ? "All Travellers' Expenses Ledger" : "My Expenses Ledger"}</span>
+            <span>
+              {isTripPlanner
+                ? "All Travellers' Expenses Ledger"
+                : travellerLedgerFilter === 'all'
+                ? "All Group Transactions Ledger"
+                : "My Personal Transactions Ledger"}
+            </span>
             <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
               {visibleExpenses.length} {visibleExpenses.length === 1 ? 'entry' : 'entries'}
             </span>
@@ -1552,7 +1572,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isTripPlanner
               ? 'Complete list of all user expenses and payment settlements across all travellers.'
-              : 'Displaying your personal expenses and payment receipts only.'}
+              : travellerLedgerFilter === 'all'
+              ? `Viewing all ${expenses.length} group transactions across all travellers in this trip.`
+              : 'Viewing only transactions where you paid, received settlement, or consumed a split share.'}
           </p>
         </div>
 
@@ -1587,9 +1609,43 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-700">
-            <Lock className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-            <span>Trip Planner manages group expenses & settlements</span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setTravellerLedgerFilter('all')}
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  travellerLedgerFilter === 'all'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-sky-500" />
+                <span>All Group Ledger</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {expenses.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTravellerLedgerFilter('mine')}
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  travellerLedgerFilter === 'mine'
+                    ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5 text-sky-500" />
+                <span>My Transactions</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {expenses.filter(isMyOwnExpense).length}
+                </span>
+              </button>
+            </div>
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/40 text-slate-500 text-[11px] border border-slate-200 dark:border-slate-800">
+              <Lock className="w-3 h-3 text-sky-500 shrink-0" />
+              <span>Read-only view</span>
+            </div>
           </div>
         )}
       </div>
@@ -1720,35 +1776,80 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       }`}
                     >
                       <IndianRupee className="w-4 h-4 mr-0.5" />
-                      <span>
-  {(isTripPlanner
-    ? exp.amountINR
-    : (!isPaymentReceived && !isDeposit
-        ? getTravellerShare(exp)
-        : exp.amountINR)
-  ).toLocaleString('en-IN')}
-</span>
+                      <span>{exp.amountINR.toLocaleString('en-IN')}</span>
                     </div>
-                    {!isTripPlanner && !isPaymentReceived && !isDeposit && (
-  <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">
-    Your share
-  </span>
-)}
-                    {isTripPlanner && !isPaymentReceived && !isDeposit && exp.splitMode === 'custom' && exp.splitWithUsers && (
-                      <span className="text-[10px] text-slate-500">
-                        ₹{Math.round(exp.amountINR / exp.splitWithUsers.length)} / person
-                      </span>
-                    )}
-                    {isTripPlanner && !isPaymentReceived && !isDeposit && (!exp.splitMode || exp.splitMode === 'all') && (
-                      <span className="text-[10px] text-slate-500">
-                        ₹{Math.round(exp.amountINR / Math.max(1, activeTravelers.length))} / person
-                      </span>
-                    )}
-                    {isPaymentReceived && (
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                        Settled via {exp.paymentMethod || 'UPI'}
-                      </span>
-                    )}
+
+                    {/* Breakdown & Context */}
+                    {(() => {
+                      if (isPaymentReceived) {
+                        return (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                            Settled via {exp.paymentMethod || 'UPI'}
+                          </span>
+                        );
+                      }
+                      if (isDeposit) {
+                        return (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                            Group Pool Deposit
+                          </span>
+                        );
+                      }
+
+                      const details = getMemberTransactionDetails(myCanonicalMember, exp);
+
+                      if (isTripPlanner) {
+                        if (exp.splitMode === 'single') {
+                          return (
+                            <span className="text-[10px] text-slate-500 block">
+                              For {exp.splitTargetUser || 'member'}
+                            </span>
+                          );
+                        }
+                        if (exp.splitMode === 'custom' && exp.splitWithUsers && exp.splitWithUsers.length > 0) {
+                          return (
+                            <span className="text-[10px] text-slate-500 block">
+                              ₹{Math.round(exp.amountINR / exp.splitWithUsers.length).toLocaleString('en-IN')} / person ({exp.splitWithUsers.length})
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-[10px] text-slate-500 block">
+                            ₹{Math.round(exp.amountINR / Math.max(1, activeTravelers.length)).toLocaleString('en-IN')} / person
+                          </span>
+                        );
+                      }
+
+                      // Traveller context:
+                      if (details.role === 'paid') {
+                        if (details.memberShare > 0) {
+                          return (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                              You covered bill • Your share: ₹{details.memberShare.toLocaleString('en-IN')}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                            You covered full bill for group
+                          </span>
+                        );
+                      }
+
+                      if (details.isIncluded && details.memberShare > 0) {
+                        return (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">
+                            Your share: ₹{details.memberShare.toLocaleString('en-IN')}
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <span className="text-[10px] text-slate-400 font-medium block">
+                          Not in this split
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {(isTripCreator || isTripPlanner) && (
@@ -1828,97 +1929,95 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             )}
           </div>
 
-          {/* Traveller Selector Ribbon (for Trip Planner) */}
-          {isTripPlanner && (
-            <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between mb-2.5 px-1">
-                <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-sky-500" />
-                  <span>Select Traveller ({activeTravelers.length})</span>
-                </div>
-                <span className="text-[11px] text-slate-400">
-                  Switch traveller to view itemized breakdown
-                </span>
+          {/* Traveller Selector Ribbon (Available to all users) */}
+          <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center justify-between mb-2.5 px-1">
+              <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-sky-500" />
+                <span>Select Traveller ({activeTravelers.length})</span>
               </div>
-
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedHistoryTraveller('all');
-                    setTravellerTxnFilter('all');
-                  }}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-                    selectedHistoryTraveller === 'all'
-                      ? 'bg-sky-500 text-slate-950 font-black shadow-sm'
-                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>All Travellers Overview</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                    selectedHistoryTraveller === 'all'
-                      ? 'bg-slate-950/20 text-slate-950 font-black'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}>
-                    {activeTravelers.length}
-                  </span>
-                </button>
-
-                {activeTravelers.map((member) => {
-                  const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
-                  const net = b.paid - b.owes - b.received;
-                  const isSelected = selectedHistoryTraveller === member;
-                  const txnCount = getMemberTransactionCount(member);
-                  const isMe = isMyTravelerName(member);
-
-                  return (
-                    <button
-                      key={member}
-                      type="button"
-                      onClick={() => {
-                        setSelectedHistoryTraveller(member);
-                        setTravellerTxnFilter('all');
-                      }}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
-                        isSelected
-                          ? 'bg-sky-500 text-slate-950 font-black border-sky-400 shadow-sm'
-                          : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      <User className={`w-3.5 h-3.5 ${isSelected ? 'text-slate-950' : 'text-slate-400'}`} />
-                      <span>{member}</span>
-                      {isMe && (
-                        <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded ${
-                          isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                        }`}>
-                          You
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        isSelected
-                          ? 'bg-slate-950/15 text-slate-950'
-                          : net >= 0
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                      }`}>
-                        {net >= 0 ? `+₹${Math.round(net)}` : `-₹${Math.abs(Math.round(net))}`}
-                      </span>
-                      <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
-                        isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                      }`}>
-                        {txnCount}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-[11px] text-slate-400">
+                Switch traveller to view itemized breakdown
+              </span>
             </div>
-          )}
 
-          {/* VIEW A: SPECIFIC TRAVELLER SELECTED (OR TRAVELLER VIEWING OWN AUDIT) */}
-          {(selectedHistoryTraveller !== 'all' || !isTripPlanner) && (() => {
-            const currentMember = !isTripPlanner ? myCanonicalMember : selectedHistoryTraveller;
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedHistoryTraveller('all');
+                  setTravellerTxnFilter('all');
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+                  selectedHistoryTraveller === 'all'
+                    ? 'bg-sky-500 text-slate-950 font-black shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>All Travellers Overview</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
+                  selectedHistoryTraveller === 'all'
+                    ? 'bg-slate-950/20 text-slate-950 font-black'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}>
+                  {activeTravelers.length}
+                </span>
+              </button>
+
+              {activeTravelers.map((member) => {
+                const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
+                const net = b.paid - b.owes - b.received;
+                const isSelected = selectedHistoryTraveller === member;
+                const txnCount = getMemberTransactionCount(member);
+                const isMe = isMyTravelerName(member);
+
+                return (
+                  <button
+                    key={member}
+                    type="button"
+                    onClick={() => {
+                      setSelectedHistoryTraveller(member);
+                      setTravellerTxnFilter('all');
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
+                      isSelected
+                        ? 'bg-sky-500 text-slate-950 font-black border-sky-400 shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <User className={`w-3.5 h-3.5 ${isSelected ? 'text-slate-950' : 'text-slate-400'}`} />
+                    <span>{member}</span>
+                    {isMe && (
+                      <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded ${
+                        isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                      }`}>
+                        You
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                      isSelected
+                        ? 'bg-slate-950/15 text-slate-950'
+                        : net >= 0
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                    }`}>
+                      {net >= 0 ? `+₹${Math.round(net)}` : `-₹${Math.abs(Math.round(net))}`}
+                    </span>
+                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {txnCount}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* VIEW A: SPECIFIC TRAVELLER SELECTED */}
+          {selectedHistoryTraveller !== 'all' && (() => {
+            const currentMember = selectedHistoryTraveller;
             const b = memberBalances[currentMember] || { paid: 0, owes: 0, received: 0 };
             const net = b.paid - b.owes - b.received;
             const isMe = isMyTravelerName(currentMember);
@@ -2288,7 +2387,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           })()}
 
           {/* VIEW B: ALL TRAVELLERS OVERVIEW */}
-          {selectedHistoryTraveller === 'all' && isTripPlanner && (
+          {selectedHistoryTraveller === 'all' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex items-center justify-between px-1">
                 <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">

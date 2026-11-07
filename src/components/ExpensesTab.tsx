@@ -191,6 +191,26 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     [currentUser, userProfile, trip.collaborators]
   );
 
+  // Helper to check if an identifier belongs to the trip planner / creator
+  const isPlannerIdentifier = React.useCallback((ident?: string): boolean => {
+    if (!ident) return false;
+    const clean = ident.trim().toLowerCase();
+    if (trip.ownerId && clean === trip.ownerId.toLowerCase()) return true;
+    if (trip.ownerEmail && clean === trip.ownerEmail.trim().toLowerCase()) return true;
+    if (trip.ownerName && clean === trip.ownerName.trim().toLowerCase()) return true;
+    if (clean === 'trip planner' || clean === 'planner') return true;
+    if (Array.isArray(trip.collaborators)) {
+      return trip.collaborators.some(
+        (c) =>
+          c.role === 'planner' &&
+          (c.name.trim().toLowerCase() === clean ||
+            (c.email && c.email.trim().toLowerCase() === clean) ||
+            (c.uid && c.uid.toLowerCase() === clean))
+      );
+    }
+    return false;
+  }, [trip]);
+
   // Dynamically resolve actual trip members without duplicate or conflicting names
   const activeTravelers = React.useMemo(() => {
     const list: string[] = [];
@@ -257,16 +277,26 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   }, [activeTravelers]);
 
   React.useEffect(() => {
-    if (modalOpen) {
-      setPaidBy(currentUserName);
-      setReceivedBy(currentUserName);
+    if (modalOpen && !editingExpenseId) {
+      if (transactionType === 'payment_received') {
+        const otherTraveler =
+          activeTravelers.find((t) => !isMyTravelerName(t) && !isPlannerIdentifier(t)) ||
+          activeTravelers.find((t) => !isMyTravelerName(t)) ||
+          activeTravelers[0];
+        setPaidBy(otherTraveler || currentUserName);
+        setReceivedBy(currentUserName);
+      } else {
+        setPaidBy(currentUserName);
+        setReceivedBy(currentUserName);
+      }
       if (!isTripPlanner) {
         setSingleTargetUser(currentUserName);
         // Default to 'all' or 'single'
         setSplitMode('all');
       }
     }
-  }, [modalOpen, currentUserName, isTripPlanner]);
+  }, [modalOpen, editingExpenseId, transactionType, currentUserName, isTripPlanner, activeTravelers, isMyTravelerName, isPlannerIdentifier]);
+
 
   const handleAddTraveler = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -297,25 +327,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     setCustomSelectedUsers((prev) => prev.filter((u) => u !== nameToRemove));
   };
 
-  // Helper to check if an identifier belongs to the trip planner / creator
-  const isPlannerIdentifier = React.useCallback((ident?: string): boolean => {
-    if (!ident) return false;
-    const clean = ident.trim().toLowerCase();
-    if (trip.ownerId && clean === trip.ownerId.toLowerCase()) return true;
-    if (trip.ownerEmail && clean === trip.ownerEmail.trim().toLowerCase()) return true;
-    if (trip.ownerName && clean === trip.ownerName.trim().toLowerCase()) return true;
-    if (clean === 'trip planner' || clean === 'planner') return true;
-    if (Array.isArray(trip.collaborators)) {
-      return trip.collaborators.some(
-        (c) =>
-          c.role === 'planner' &&
-          (c.name.trim().toLowerCase() === clean ||
-            (c.email && c.email.trim().toLowerCase() === clean) ||
-            (c.uid && c.uid.toLowerCase() === clean))
-      );
-    }
-    return false;
-  }, [trip]);
+
 
   // Helper to determine the traveller's individual share of an expense:
   // (e.g. 1000 INR split across 5 travellers = strictly 200 INR for this traveller)
@@ -366,6 +378,24 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     [activeTravelers, isMyTravelerName]
   );
 
+  // Comparator to sort transactions:
+  // 1. Firstly date wise: newer date at the top, older date at the bottom (old down to new up)
+  // 2. Then added time: newer added at the top, older added at the bottom (old down and new up)
+  const compareTransactionsDesc = React.useCallback((a: Expense, b: Expense): number => {
+    const dateA = a.date ? new Date(a.date).getTime() : 0;
+    const dateB = b.date ? new Date(b.date).getTime() : 0;
+    if (dateB !== dateA) {
+      return dateB - dateA;
+    }
+    const createdA = a.createdAt
+      ? new Date(a.createdAt).getTime()
+      : (a.id && a.id.startsWith('exp_') ? Number(a.id.replace('exp_', '')) : 0);
+    const createdB = b.createdAt
+      ? new Date(b.createdAt).getTime()
+      : (b.id && b.id.startsWith('exp_') ? Number(b.id.replace('exp_', '')) : 0);
+    return createdB - createdA;
+  }, []);
+
   // Helper to determine if an expense is relevant to the current traveller
   const isMyOwnExpense = React.useCallback((exp: Expense): boolean => {
     // Payments & deposits
@@ -373,9 +403,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       return (
         isMyTravelerName(exp.paidBy) ||
         isMyTravelerName(exp.receivedBy) ||
-        exp.paidByUid === currentUser?.uid ||
-        exp.receivedByUid === currentUser?.uid ||
-        exp.createdBy === currentUser?.uid
+        (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
+        (!exp.receivedBy && exp.receivedByUid === currentUser?.uid)
       );
     }
 
@@ -389,7 +418,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       return (
         isMyTravelerName(exp.splitTargetUser) ||
         isMyTravelerName(exp.paidBy) ||
-        exp.paidByUid === currentUser?.uid ||
+        (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
         exp.createdBy === currentUser?.uid
       );
     }
@@ -402,7 +431,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         inCustom ||
         inSplits ||
         isMyTravelerName(exp.paidBy) ||
-        exp.paidByUid === currentUser?.uid ||
+        (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
         exp.createdBy === currentUser?.uid
       );
     }
@@ -411,37 +440,42 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     return (
       getTravellerShare(exp) > 0 ||
       isMyTravelerName(exp.paidBy) ||
-      exp.paidByUid === currentUser?.uid ||
+      (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
       exp.createdBy === currentUser?.uid
     );
   }, [currentUser, isMyTravelerName, getTravellerShare]);
 
   // For Trip Planner: Show all travellers' expenses! Can filter by individual traveller or view 'all'
   // For Traveller: Show all group transactions or filter to personal transactions via travellerLedgerFilter
-  const visibleExpenses = expenses.filter((exp) => {
-    if (isTripPlanner) {
-      if (plannerFilter === 'all') {
-        return true;
-      }
-      const target = plannerFilter.trim().toLowerCase();
-      const payer = (exp.paidBy || '').trim().toLowerCase();
-      const receiver = (exp.receivedBy || '').trim().toLowerCase();
-      const splitTarget = (exp.splitTargetUser || '').trim().toLowerCase();
-      const inCustom = Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => u.trim().toLowerCase() === target);
-      return payer === target || receiver === target || splitTarget === target || inCustom;
-    }
-    if (travellerLedgerFilter === 'all') {
-      return true;
-    }
-    return isMyOwnExpense(exp);
-  });
+  // Always sorted firstly date-wise (old down, new up) and then added-wise (old down, new up)
+  const visibleExpenses = React.useMemo(() => {
+    return expenses
+      .filter((exp) => {
+        if (isTripPlanner) {
+          if (plannerFilter === 'all') {
+            return true;
+          }
+          const target = plannerFilter.trim().toLowerCase();
+          const payer = (exp.paidBy || '').trim().toLowerCase();
+          const receiver = (exp.receivedBy || '').trim().toLowerCase();
+          const splitTarget = (exp.splitTargetUser || '').trim().toLowerCase();
+          const inCustom = Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => u.trim().toLowerCase() === target);
+          return payer === target || receiver === target || splitTarget === target || inCustom;
+        }
+        if (travellerLedgerFilter === 'all') {
+          return true;
+        }
+        return isMyOwnExpense(exp);
+      })
+      .sort(compareTransactionsDesc);
+  }, [expenses, isTripPlanner, plannerFilter, travellerLedgerFilter, isMyOwnExpense, compareTransactionsDesc]);
 
   // Calculate personal totals for Traveller:
   const myPaidExpenses = expenses
     .filter(
       (e) =>
         (!e.transactionType || e.transactionType === 'expense') &&
-        (isMyTravelerName(e.paidBy) || e.paidByUid === currentUser?.uid || e.createdBy === currentUser?.uid)
+        (isMyTravelerName(e.paidBy) || (!e.paidBy && e.paidByUid === currentUser?.uid))
     )
     .reduce((sum, e) => sum + (e.amountINR || 0), 0);
 
@@ -449,7 +483,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     .filter(
       (e) =>
         (e.transactionType === 'payment_received' || e.transactionType === 'deposit') &&
-        (isMyTravelerName(e.paidBy) || e.paidByUid === currentUser?.uid || e.createdBy === currentUser?.uid)
+        (isMyTravelerName(e.paidBy) || (!e.paidBy && e.paidByUid === currentUser?.uid))
     )
     .reduce((sum, e) => sum + (e.amountINR || 0), 0);
 
@@ -457,7 +491,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     .filter(
       (e) =>
         e.transactionType === 'payment_received' &&
-        (isMyTravelerName(e.receivedBy) || e.receivedByUid === currentUser?.uid)
+        (isMyTravelerName(e.receivedBy) || (!e.receivedBy && e.receivedByUid === currentUser?.uid))
     )
     .reduce((sum, e) => sum + (e.amountINR || 0), 0);
 
@@ -477,14 +511,22 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         .reduce((sum, e) => sum + (e.amountINR || 0), 0)
     : myTotalExpenseShare;
 
+  const allPaymentsReceived = expenses
+    .filter((e) => e.transactionType === 'payment_received' || e.transactionType === 'deposit')
+    .reduce((sum, e) => sum + (e.amountINR || 0), 0);
+
   const totalPaymentsReceived = isTripPlanner
-    ? visibleExpenses
-        .filter((e) => e.transactionType === 'payment_received' || e.transactionType === 'deposit')
-        .reduce((sum, e) => sum + (e.amountINR || 0), 0)
+    ? (plannerFilter === 'all'
+        ? allPaymentsReceived
+        : visibleExpenses
+            .filter((e) => e.transactionType === 'payment_received' || e.transactionType === 'deposit')
+            .reduce((sum, e) => sum + (e.amountINR || 0), 0))
     : myPaymentsReceived;
 
   const budgetINR = trip.budgetINR || 1;
   const remainingBudget = budgetINR - totalSpent;
+  // Remaining Amount required by user: total spend - received
+  const remainingAmount = totalSpent - totalPaymentsReceived;
 
   // Category aggregations for expenses: strictly traveller's share for non-planners
   const categoryTotals = visibleExpenses
@@ -620,6 +662,14 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       const payerName = paidBy.trim() || currentUserName;
       const receiverName = receivedBy.trim() || currentUserName;
 
+      const payerCollab = trip.collaborators?.find((c) => c.name?.toLowerCase() === payerName.toLowerCase());
+      const receiverCollab = trip.collaborators?.find((c) => c.name?.toLowerCase() === receiverName.toLowerCase());
+      const payerUid =
+        payerCollab?.uid ||
+        (isMyTravelerName(payerName) ? currentUser?.uid : undefined) ||
+        ('user_' + payerName.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+      const receiverUid = receiverCollab?.uid || (isMyTravelerName(receiverName) ? currentUser?.uid : undefined);
+
       if (editingExpenseId) {
         const existing = expenses.find((e) => e.id === editingExpenseId);
         const updatedExp: Expense = {
@@ -629,7 +679,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           description: description.trim(),
           amountINR: Number(amountINR),
           paidBy: payerName,
-          paidByUid: existing?.paidByUid || currentUser?.uid || 'user_local',
+          paidByUid: isMyTravelerName(payerName)
+            ? (currentUser?.uid || 'user_local')
+            : (payerCollab?.uid || existing?.paidByUid || payerUid),
           category,
           date: date || new Date().toISOString().split('T')[0],
           createdBy: existing?.createdBy || creatorUid,
@@ -644,8 +696,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           transactionType,
           receivedBy: transactionType === 'payment_received' ? receiverName : undefined,
           receivedByUid:
-            transactionType === 'payment_received' && (receiverName === currentUserName || receiverName === 'You')
-              ? currentUser?.uid
+            transactionType === 'payment_received'
+              ? (isMyTravelerName(receiverName) ? currentUser?.uid : receiverUid)
               : undefined,
           paymentMethod: transactionType !== 'expense' ? paymentMethod : undefined
         };
@@ -670,7 +722,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         description: description.trim(),
         amountINR: Number(amountINR),
         paidBy: payerName,
-        paidByUid: currentUser?.uid || 'user_local',
+        paidByUid: payerUid,
         category,
         date: date || new Date().toISOString().split('T')[0],
         createdBy: creatorUid,
@@ -685,8 +737,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         transactionType,
         receivedBy: transactionType === 'payment_received' ? receiverName : undefined,
         receivedByUid:
-          transactionType === 'payment_received' && (receiverName === currentUserName || receiverName === 'You')
-            ? currentUser?.uid
+          transactionType === 'payment_received'
+            ? (isMyTravelerName(receiverName) ? currentUser?.uid : receiverUid)
             : undefined,
         paymentMethod: transactionType !== 'expense' ? paymentMethod : undefined
       };
@@ -729,7 +781,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   // Calculate balances across all expenses uniformly for every traveller and planner:
   expenses.forEach((exp) => {
     const rawPayer = exp.paidBy || currentUserName;
-    const payer = isMyTravelerName(rawPayer, exp.paidByUid)
+    const isPayerMe = isMyTravelerName(rawPayer) || (!rawPayer && exp.paidByUid === currentUser?.uid);
+    const payer = isPayerMe
       ? myCanonicalMember
       : (activeTravelers.find((t) => t.toLowerCase() === rawPayer.toLowerCase()) || rawPayer);
     if (!memberBalances[payer]) {
@@ -739,7 +792,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     // Payment Received by traveller (Settlement transfer)
     if (exp.transactionType === 'payment_received') {
       const rawReceiver = exp.receivedBy || currentUserName;
-      const receiver = isMyTravelerName(rawReceiver, exp.receivedByUid)
+      const isReceiverMe = isMyTravelerName(rawReceiver) || (!rawReceiver && exp.receivedByUid === currentUser?.uid);
+      const receiver = isReceiverMe
         ? myCanonicalMember
         : (activeTravelers.find((t) => t.toLowerCase() === rawReceiver.toLowerCase()) || rawReceiver);
       if (!memberBalances[receiver]) {
@@ -811,14 +865,14 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       };
 
       const isPayer =
-        isTargetMember(exp.paidBy, exp.paidByUid) ||
-        (isMyTravelerName(memberName) && (exp.paidByUid === currentUser?.uid || exp.createdBy === currentUser?.uid));
+        isTargetMember(exp.paidBy) ||
+        (!exp.paidBy && isMyTravelerName(memberName) && exp.paidByUid === currentUser?.uid);
 
       // Handle Settlement / Payment Received
       if (exp.transactionType === 'payment_received') {
         const isReceiver =
-          isTargetMember(exp.receivedBy, exp.receivedByUid) ||
-          (isMyTravelerName(memberName) && exp.receivedByUid === currentUser?.uid);
+          isTargetMember(exp.receivedBy) ||
+          (!exp.receivedBy && isMyTravelerName(memberName) && exp.receivedByUid === currentUser?.uid);
 
         if (isPayer) {
           return {
@@ -1200,25 +1254,36 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Remaining Budget for Planner / Balance Status for Traveller */}
+        {/* Card 3: Remaining Amount (Spend − Received) for Planner / Balance Status for Traveller */}
         {isTripPlanner ? (
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
             <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-              <span>Remaining Budget</span>
+              <span>Remaining Amount</span>
               <CreditCard className="w-4 h-4 text-indigo-500" />
             </div>
             <div
               className={`text-2xl font-black flex items-center ${
-                remainingBudget < 0
-                  ? 'text-rose-500 dark:text-rose-400'
-                  : 'text-indigo-600 dark:text-indigo-400'
+                remainingAmount > 0
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : remainingAmount === 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-teal-600 dark:text-teal-400'
               }`}
             >
               <IndianRupee className="w-5 h-5 mr-1" />
-              {Math.abs(remainingBudget).toLocaleString('en-IN')}
+              {Math.abs(remainingAmount).toLocaleString('en-IN')}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              {remainingBudget >= 0 ? 'Within budget limit' : 'Budget limit exceeded'}
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between">
+              <span>
+                {remainingAmount > 0
+                  ? 'Spend − Received (To collect)'
+                  : remainingAmount === 0
+                  ? 'Spend − Received (All settled)'
+                  : 'Surplus collected'}
+              </span>
+              <span className="font-semibold text-slate-400">
+                Budget: ₹{trip.budgetINR.toLocaleString('en-IN')}
+              </span>
             </div>
           </div>
         ) : (
@@ -1586,6 +1651,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 setDescription('');
                 setAmountINR(0);
                 setTransactionType('payment_received');
+                const otherTraveler =
+                  activeTravelers.find((t) => !isMyTravelerName(t) && !isPlannerIdentifier(t)) ||
+                  activeTravelers.find((t) => !isMyTravelerName(t)) ||
+                  activeTravelers[1] ||
+                  activeTravelers[0];
+                if (otherTraveler) setPaidBy(otherTraveler);
+                setReceivedBy(currentUserName);
                 setModalOpen(true);
               }}
               className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
@@ -1600,6 +1672,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 setDescription('');
                 setAmountINR(0);
                 setTransactionType('expense');
+                setPaidBy(currentUserName);
                 setModalOpen(true);
               }}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md shadow-sky-500/20 transition-all hover:scale-[1.01] cursor-pointer"
@@ -2029,7 +2102,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 details: getMemberTransactionDetails(currentMember, exp)
               }))
               .filter((item) => item.details.isIncluded)
-              .sort((a, b) => new Date(b.exp.date || 0).getTime() - new Date(a.exp.date || 0).getTime());
+              .sort((a, b) => compareTransactionsDesc(a.exp, b.exp));
 
             // Summary counts
             const paidCount = memberTxns.filter((t) => t.details.role === 'paid').length;
@@ -2410,7 +2483,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       details: getMemberTransactionDetails(member, exp)
                     }))
                     .filter((item) => item.details.isIncluded)
-                    .sort((a, b) => new Date(b.exp.date || 0).getTime() - new Date(a.exp.date || 0).getTime());
+                    .sort((a, b) => compareTransactionsDesc(a.exp, b.exp));
 
                   const recentTxns = memberTxns.slice(0, 3);
 
@@ -2542,7 +2615,10 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             <div className="grid grid-cols-2 rounded-2xl bg-slate-100 dark:bg-slate-950 p-1.5 mb-4 border border-slate-200 dark:border-slate-800 gap-1.5">
               <button
                 type="button"
-                onClick={() => setTransactionType('expense')}
+                onClick={() => {
+                  setTransactionType('expense');
+                  setPaidBy(currentUserName);
+                }}
                 className={`py-2 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center ${
                   transactionType === 'expense'
                     ? 'bg-sky-500 text-slate-950 shadow-sm font-black'
@@ -2554,7 +2630,15 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setTransactionType('payment_received')}
+                onClick={() => {
+                  setTransactionType('payment_received');
+                  const otherTraveler =
+                    activeTravelers.find((t) => !isMyTravelerName(t) && !isPlannerIdentifier(t)) ||
+                    activeTravelers.find((t) => !isMyTravelerName(t)) ||
+                    activeTravelers[0];
+                  if (otherTraveler) setPaidBy(otherTraveler);
+                  setReceivedBy(currentUserName);
+                }}
                 className={`py-2 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center ${
                   transactionType === 'payment_received'
                     ? 'bg-emerald-500 text-slate-950 shadow-sm font-black'
@@ -2584,13 +2668,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                 ? isTripPlanner
                   ? 'Record a trip expense with equal split, single user, or select travelers.'
                   : 'Record an expense paid by you for this journey.'
-                : 'Log money received by a traveler from another member (e.g. UPI transfer, cash settlement).'}
+                : 'Log money received from a traveler (e.g. member sent UPI settlement to trip planner).'}
             </p>
 
             <form onSubmit={handleCreateExpense} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
-                  {transactionType === 'expense' ? 'Description / Item *' : 'Payment Details / Note *'}
+                  {transactionType === 'expense' ? 'Description / Item *' : 'Payment Note / Reference *'}
                 </label>
                 <input
                   type="text"
@@ -2601,7 +2685,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                   placeholder={
                     transactionType === 'expense'
                       ? 'e.g. Dinner at 1135 AD, Amber Fort Guides, Highway Toll'
-                      : 'e.g. Rohan paid Aarav for hotel bill via UPI'
+                      : `e.g. ${paidBy || 'Member'} paid ${receivedBy || 'Planner'} via UPI / Cash`
                   }
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100"
                 />
@@ -2674,65 +2758,71 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                     >
                       {activeTravelers.map((t) => (
                         <option key={t} value={t}>
-                          {t}
+                          {t} {isMyTravelerName(t) ? '(You)' : ''}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
-                      Paid By (Sender)
-                    </label>
-                    <select
-                      value={paidBy}
-                      onChange={(e) => setPaidBy(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
-                    >
-                      {activeTravelers.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
+                        Paid By (Sender / Member) *
+                      </label>
+                      <select
+                        value={paidBy}
+                        onChange={(e) => setPaidBy(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
+                      >
+                        {activeTravelers.map((t) => (
+                          <option key={t} value={t}>
+                            {t} {isMyTravelerName(t) ? '(You)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
-                      Received By
-                    </label>
-                    <select
-                      value={receivedBy}
-                      onChange={(e) => setReceivedBy(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
-                    >
-                      {activeTravelers.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
+                        Received By (Receiver / Planner) *
+                      </label>
+                      <select
+                        value={receivedBy}
+                        onChange={(e) => setReceivedBy(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
+                      >
+                        {activeTravelers.map((t) => (
+                          <option key={t} value={t}>
+                            {t} {isMyTravelerName(t) ? '(You)' : isPlannerIdentifier(t) ? '(Planner)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
-                      Method
-                    </label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as any)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
-                    >
-                      <option value="UPI">UPI (GPay / PhonePe)</option>
-                      <option value="Cash">Cash Handover</option>
-                      <option value="Bank Transfer">Bank Transfer (IMPS)</option>
-                      <option value="Card">Card</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">
+                        Method
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value as any)}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-slate-100 cursor-pointer"
+                      >
+                        <option value="UPI">UPI (GPay / PhonePe)</option>
+                        <option value="Cash">Cash Handover</option>
+                        <option value="Bank Transfer">Bank Transfer (IMPS)</option>
+                        <option value="Card">Card</option>
+                      </select>
+                    </div>
                   </div>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    ✓ Sender ({paidBy || 'Member'}) transferred money to Receiver ({receivedBy || 'Planner'}). This will be logged as payment received and reduce the remaining amount.
+                  </p>
                 </div>
               )}
+
 
               {/* Multi-mode Split Options (for Expenses only) */}
               {transactionType === 'expense' && (

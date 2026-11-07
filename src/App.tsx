@@ -1528,7 +1528,7 @@ function MainContent() {
       {activeTrip && (
         <nav
           aria-label="Mobile Navigation"
-          className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shadow-2xl transition-colors transform-gpu translate-y-0 will-change-transform"
+          className="md:hidden fixed bottom-0 left-0 right-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shadow-2xl transition-colors"
         >
           <div className="grid grid-cols-6 gap-0.5 max-w-lg mx-auto">
             <button

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Plus,
   Trash2,
+  Pencil,
   Star,
   Camera,
   Calendar,
@@ -29,6 +30,7 @@ import { useAuth } from '../context/AuthContext.tsx';
 import {
   subscribeJournalEntries,
   addJournalEntry,
+  updateJournalEntry,
   deleteJournalEntry
 } from '../services/travelService.ts';
 import { compressImageFile, uploadPhotoFile } from '../utils/fileUpload.ts';
@@ -41,6 +43,9 @@ interface JournalTabProps {
   packingItems: PackingItem[];
   isPro: boolean;
   onOpenUpgrade: (msg?: string) => void;
+  isTripPlanner?: boolean;
+  entries?: JournalEntry[];
+  onEntriesChange?: (entries: JournalEntry[]) => void;
 }
 
 export const JournalTab: React.FC<JournalTabProps> = ({
@@ -50,11 +55,26 @@ export const JournalTab: React.FC<JournalTabProps> = ({
   documents,
   packingItems,
   isPro,
-  onOpenUpgrade
+  onOpenUpgrade,
+  isTripPlanner = false,
+  entries: propEntries,
+  onEntriesChange
 }) => {
   const { currentUser, userProfile } = useAuth();
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [internalEntries, setInternalEntries] = useState<JournalEntry[]>([]);
+  const entries = propEntries !== undefined ? propEntries : internalEntries;
+  const setEntries = (updater: React.SetStateAction<JournalEntry[]>) => {
+    if (typeof updater === 'function') {
+      const next = updater(entries);
+      setInternalEntries(next);
+      onEntriesChange?.(next);
+    } else {
+      setInternalEntries(updater);
+      onEntriesChange?.(updater);
+    }
+  };
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [activePhotoModal, setActivePhotoModal] = useState<{
     photos: string[];
@@ -135,6 +155,35 @@ export const JournalTab: React.FC<JournalTabProps> = ({
     setAttachedPhotos((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
+  const handleOpenAddModal = () => {
+    setEditingEntryId(null);
+    setDay(1);
+    setTitle('');
+    setContent('');
+    setRating(5);
+    setMood('Happy & Energized ✨');
+    setAttachedPhotos([]);
+    setCustomUrlInput('');
+    setErrorMessage(null);
+    setModalOpen(true);
+  };
+
+  const handleStartEdit = (entry: JournalEntry) => {
+    setEditingEntryId(entry.id);
+    setDay(entry.day || 1);
+    setTitle(entry.title || '');
+    setContent(entry.content || '');
+    setRating(entry.rating || 5);
+    setMood(entry.mood || 'Happy & Energized ✨');
+    const existingPhotos = (entry.photos && entry.photos.length > 0)
+      ? entry.photos
+      : (entry.photoUrl ? [entry.photoUrl] : []);
+    setAttachedPhotos([...existingPhotos]);
+    setCustomUrlInput('');
+    setErrorMessage(null);
+    setModalOpen(true);
+  };
+
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim() || !trip?.id) return;
@@ -149,36 +198,73 @@ export const JournalTab: React.FC<JournalTabProps> = ({
       }
       const primaryPhoto = finalPhotos[0] || undefined;
 
-      const newEntry: JournalEntry = {
-        id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        tripId: trip.id,
-        day,
-        date: `Day ${day} • ${trip.title}`,
-        title: title.trim(),
-        content: content.trim(),
-        rating,
-        mood,
-        photoUrl: primaryPhoto,
-        photos: finalPhotos,
-        authorName: userProfile?.displayName || currentUser?.displayName || 'Traveler',
-        authorId: currentUser?.uid,
-        createdAt: new Date().toISOString()
-      };
+      if (editingEntryId) {
+        // Edit existing memory reflection (Trip Planner only)
+        const existing = entries.find((en) => en.id === editingEntryId);
+        const updatedEntry: JournalEntry = {
+          id: editingEntryId,
+          tripId: trip.id,
+          day,
+          date: `Day ${day} • ${trip.title}`,
+          title: title.trim(),
+          content: content.trim(),
+          rating,
+          mood,
+          photoUrl: primaryPhoto,
+          photos: finalPhotos,
+          authorName: existing?.authorName || userProfile?.displayName || currentUser?.displayName || 'Traveler',
+          authorId: existing?.authorId || currentUser?.uid,
+          createdAt: existing?.createdAt || new Date().toISOString()
+        };
 
-      // Optimistic update so photos and entry appear immediately with zero delay
-      setEntries((prev) => [newEntry, ...prev.filter((e) => e.id !== newEntry.id)]);
+        // Optimistic update
+        setEntries((prev) => prev.map((en) => (en.id === editingEntryId ? updatedEntry : en)));
 
-      // Clean form and close modal immediately
-      setTitle('');
-      setContent('');
-      setAttachedPhotos([]);
-      setCustomUrlInput('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-      setModalOpen(false);
+        // Clean form and close modal
+        setEditingEntryId(null);
+        setTitle('');
+        setContent('');
+        setAttachedPhotos([]);
+        setCustomUrlInput('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
+        setModalOpen(false);
 
-      // Persist to storage and Firestore
-      await addJournalEntry(trip.id, newEntry, trip.title);
+        // Persist update
+        await updateJournalEntry(trip.id, updatedEntry, trip.title);
+      } else {
+        // Create new memory reflection
+        const newEntry: JournalEntry = {
+          id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          tripId: trip.id,
+          day,
+          date: `Day ${day} • ${trip.title}`,
+          title: title.trim(),
+          content: content.trim(),
+          rating,
+          mood,
+          photoUrl: primaryPhoto,
+          photos: finalPhotos,
+          authorName: userProfile?.displayName || currentUser?.displayName || 'Traveler',
+          authorId: currentUser?.uid,
+          createdAt: new Date().toISOString()
+        };
+
+        // Optimistic update
+        setEntries((prev) => [newEntry, ...prev.filter((e) => e.id !== newEntry.id)]);
+
+        // Clean form and close modal
+        setTitle('');
+        setContent('');
+        setAttachedPhotos([]);
+        setCustomUrlInput('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
+        setModalOpen(false);
+
+        // Persist to Firestore
+        await addJournalEntry(trip.id, newEntry, trip.title);
+      }
     } catch (err: any) {
       console.error('Failed to save reflection to Firestore:', err);
       setErrorMessage(err?.message || 'Failed to save reflection. Please try again.');
@@ -230,7 +316,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({
           </button>
 
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-black shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -248,7 +334,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({
             Capture photos of street food, majestic sights, or quiet sunrises from {trip.destination} and write your personal reflections.
           </p>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer inline-flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -393,14 +479,42 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 pt-0 flex justify-end">
-                  <button
-                    onClick={() => handleDelete(entry.id)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                    title="Delete memory"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Action Bar (Edit & Delete only for Trip Planner) */}
+                <div className="p-4 pt-2.5 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/20">
+                  <div>
+                    {isTripPlanner ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                        <ShieldCheck className="w-3 h-3" />
+                        Trip Planner
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-medium">Trip Memory</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isTripPlanner && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(entry)}
+                        className="px-2.5 py-1.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border border-sky-500/30"
+                        title="Edit this memory reflection (Trip Planner only)"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+                    {isTripPlanner && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(entry.id)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                        title="Delete memory (Trip Planner only)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -416,16 +530,25 @@ export const JournalTab: React.FC<JournalTabProps> = ({
             <div className="shrink-0 p-5 sm:p-6 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 bg-white dark:bg-slate-900">
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-sky-500 shrink-0" />
-                  <span>Add Photo & Write Diary Story</span>
+                  {editingEntryId ? (
+                    <Pencil className="w-5 h-5 text-sky-500 shrink-0" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-sky-500 shrink-0" />
+                  )}
+                  <span>{editingEntryId ? 'Edit Travel Memory & Photos' : 'Add Photo & Write Diary Story'}</span>
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Attach travel pictures and describe your memorable moments from {trip.title}.
+                  {editingEntryId
+                    ? `Update story reflections, rating, mood, or photo attachments for this moment from ${trip.title}.`
+                    : `Attach travel pictures and describe your memorable moments from ${trip.title}.`}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={() => {
+                  setModalOpen(false);
+                  setEditingEntryId(null);
+                }}
                 className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
                 aria-label="Close modal"
               >
@@ -648,7 +771,10 @@ export const JournalTab: React.FC<JournalTabProps> = ({
               <div className="shrink-0 p-4 sm:p-5 pt-3 border-t border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-center justify-end gap-2.5 z-10">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditingEntryId(null);
+                  }}
                   className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-center"
                 >
                   Cancel
@@ -661,10 +787,10 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                   {submitting ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving...</span>
+                      <span>{editingEntryId ? 'Updating...' : 'Saving...'}</span>
                     </>
                   ) : (
-                    'Save Reflection'
+                    editingEntryId ? 'Update Reflection' : 'Save Reflection'
                   )}
                 </button>
               </div>

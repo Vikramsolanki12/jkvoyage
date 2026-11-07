@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar,
   CreditCard,
@@ -23,7 +23,11 @@ import {
   Trash2,
   Loader2,
   AlertTriangle,
-  Home
+  Home,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Star
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
@@ -56,7 +60,8 @@ import {
   TripStatus,
   TripChangeRequest,
   TripNotification,
-  NotificationType
+  NotificationType,
+  JournalEntry
 } from './types/travel.ts';
 import {
   resolveLocationCoordinates,
@@ -94,6 +99,7 @@ import {
   generateTripNotification,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  subscribeJournalEntries,
   deleteNotification
 } from './services/travelService.ts';
 
@@ -276,6 +282,51 @@ function MainContent() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [changeRequests, setChangeRequests] = useState<TripChangeRequest[]>([]);
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [homePhotoModal, setHomePhotoModal] = useState<{
+    photos: string[];
+    currentIndex: number;
+    title: string;
+    story: string;
+    day?: number;
+    authorName?: string;
+  } | null>(null);
+
+  // Compute all trip photos across all journal memory entries for the Home page
+  const allTripPhotos = useMemo(() => {
+    const list: Array<{
+      url: string;
+      entryId: string;
+      day: number;
+      title: string;
+      authorName: string;
+      story: string;
+      photoIndex: number;
+      allPhotos: string[];
+      createdAt: string;
+    }> = [];
+
+    journalEntries.forEach((entry) => {
+      const photos = (entry.photos && entry.photos.length > 0)
+        ? entry.photos
+        : (entry.photoUrl ? [entry.photoUrl] : []);
+      photos.forEach((url, pIdx) => {
+        list.push({
+          url,
+          entryId: entry.id,
+          day: entry.day,
+          title: entry.title,
+          authorName: entry.authorName,
+          story: entry.content,
+          photoIndex: pIdx,
+          allPhotos: photos,
+          createdAt: entry.createdAt
+        });
+      });
+    });
+
+    return list;
+  }, [journalEntries]);
 
   // Toast alert state
   const [toastMessage, setToastMessage] = useState<{ title: string; message: string; type: NotificationType } | null>(null);
@@ -398,6 +449,7 @@ function MainContent() {
             setMessages([]);
             setChangeRequests([]);
             setNotifications([]);
+            setJournalEntries([]);
           }
         },
         (err) => {
@@ -421,9 +473,11 @@ function MainContent() {
         setPackingItems(GUEST_PACKING);
         setMessages(GUEST_MESSAGES);
         setChangeRequests(GUEST_CHANGE_REQUESTS);
+        setJournalEntries([]);
       } else {
         setTrips([]);
         setActiveTrip(null);
+        setJournalEntries([]);
       }
       setTripsLoading(false);
     }
@@ -443,7 +497,8 @@ function MainContent() {
       subscribePackingItems(activeTrip.id, setPackingItems),
       subscribeMessages(activeTrip.id, setMessages),
       subscribeChangeRequests(activeTrip.id, setChangeRequests),
-      subscribeTripNotifications(activeTrip.id, setNotifications)
+      subscribeTripNotifications(activeTrip.id, setNotifications),
+      subscribeJournalEntries(activeTrip.id, setJournalEntries)
     ];
 
     return () => {
@@ -975,7 +1030,7 @@ function MainContent() {
     { key: 'expenses', label: 'Expenses & Split', shortLabel: 'Expenses', icon: <CreditCard className="w-4 h-4" />, count: visibleExpensesCount },
     { key: 'wallet', label: 'Passes & Wallet', shortLabel: 'Wallet', icon: <Briefcase className="w-4 h-4" />, count: documents.length },
     { key: 'packing', label: 'Packing Checklist', shortLabel: 'Packing', icon: <CheckSquare className="w-4 h-4" />, count: packingItems.length },
-    { key: 'journal', label: 'Trip Diary & Dossier', shortLabel: 'Diary', icon: <BookOpen className="w-4 h-4" /> },
+    { key: 'journal', label: 'Trip Diary & Dossier', shortLabel: 'Diary', icon: <BookOpen className="w-4 h-4" />, count: allTripPhotos.length > 0 ? allTripPhotos.length : undefined },
     { key: 'tools', label: 'Utilities & Medical SOS', shortLabel: 'Tools', icon: <Wrench className="w-4 h-4" /> }
   ];
 
@@ -1203,6 +1258,105 @@ function MainContent() {
                       </button>
                     </div>
                   </div>
+
+                  {/* All Trip Photos & Memories Gallery on Home Page */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xs transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="p-2 rounded-xl bg-sky-500/15 text-sky-500 shrink-0">
+                            <Camera className="w-4 h-4" />
+                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                            All Trip Photos & Moments
+                          </h3>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                            {allTripPhotos.length} {allTripPhotos.length === 1 ? 'Photo' : 'Photos'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Every captured picture, sunrise, meal, and group adventure from {activeTrip.title}.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('journal')}
+                          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>View Full Diary</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('journal')}
+                          className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-black shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Add Photo</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {allTripPhotos.length === 0 ? (
+                      <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30">
+                        <Camera className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-2.5" />
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">No trip photos uploaded yet</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-4">
+                          Capture moments from {activeTrip.destination}. All photos uploaded by your group will appear right here on the home page.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('journal')}
+                          className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Upload First Photo</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-3.5">
+                        {allTripPhotos.map((photoItem, idx) => (
+                          <div
+                            key={`${photoItem.entryId}_${idx}`}
+                            onClick={() =>
+                              setHomePhotoModal({
+                                photos: photoItem.allPhotos,
+                                currentIndex: photoItem.photoIndex,
+                                title: photoItem.title,
+                                story: photoItem.story,
+                                day: photoItem.day,
+                                authorName: photoItem.authorName
+                              })
+                            }
+                            className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all cursor-pointer"
+                          >
+                            <img
+                              src={photoItem.url}
+                              alt={photoItem.title}
+                              className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent opacity-85 group-hover:opacity-100 transition-opacity" />
+
+                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-slate-950/75 backdrop-blur-md text-white text-[9px] font-bold border border-white/10">
+                              Day {photoItem.day}
+                            </span>
+
+                            <div className="absolute bottom-2 inset-x-2 text-white">
+                              <p className="text-[11px] font-bold truncate leading-tight drop-shadow-sm">
+                                {photoItem.title}
+                              </p>
+                              <p className="text-[9px] text-slate-300 truncate mt-0.5 opacity-90">
+                                by {photoItem.authorName}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1272,6 +1426,9 @@ function MainContent() {
                   packingItems={packingItems}
                   isPro={isPro}
                   onOpenUpgrade={handleOpenUpgrade}
+                  isTripPlanner={isTripPlanner}
+                  entries={journalEntries}
+                  onEntriesChange={setJournalEntries}
                 />
               )}
 
@@ -1520,6 +1677,124 @@ function MainContent() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Full Photo Modal / Multi-Photo Lightbox from Home Page */}
+      {homePhotoModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6 bg-slate-950/95 backdrop-blur-md animate-in fade-in">
+          <div className="relative max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90vh] my-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800 text-white shrink-0">
+              <div className="flex items-center gap-2.5 truncate mr-2">
+                {homePhotoModal.day && (
+                  <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 font-bold text-[10px] shrink-0 border border-sky-500/30">
+                    Day {homePhotoModal.day}
+                  </span>
+                )}
+                <h4 className="text-sm font-bold truncate">{homePhotoModal.title}</h4>
+                {homePhotoModal.authorName && (
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">• by {homePhotoModal.authorName}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setHomePhotoModal(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Photo Canvas */}
+            <div className="relative flex-1 bg-black flex items-center justify-center min-h-[260px] sm:min-h-[400px] overflow-hidden p-2">
+              <img
+                src={homePhotoModal.photos[homePhotoModal.currentIndex]}
+                alt={homePhotoModal.title}
+                className="max-h-[58vh] sm:max-h-[66vh] w-auto max-w-full object-contain mx-auto rounded-lg"
+              />
+
+              {homePhotoModal.photos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHomePhotoModal((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              currentIndex:
+                                (prev.currentIndex - 1 + prev.photos.length) % prev.photos.length
+                            }
+                          : null
+                      )
+                    }
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white transition-all cursor-pointer"
+                    title="Previous photo"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHomePhotoModal((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              currentIndex: (prev.currentIndex + 1) % prev.photos.length
+                            }
+                          : null
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white transition-all cursor-pointer"
+                    title="Next photo"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail Strip if multiple photos */}
+            {homePhotoModal.photos.length > 1 && (
+              <div className="p-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-center gap-2 overflow-x-auto shrink-0">
+                {homePhotoModal.photos.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() =>
+                      setHomePhotoModal((prev) => (prev ? { ...prev, currentIndex: idx } : null))
+                    }
+                    className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                      homePhotoModal.currentIndex === idx
+                        ? 'border-sky-500 scale-105 shadow-md shadow-sky-500/30'
+                        : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={p} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Story / Description Footer */}
+            {homePhotoModal.story && (
+              <div className="p-4 bg-slate-950 border-t border-slate-800 text-xs text-slate-300 max-h-32 overflow-y-auto shrink-0 flex items-center justify-between gap-4">
+                <p className="whitespace-pre-line leading-relaxed flex-1">{homePhotoModal.story}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHomePhotoModal(null);
+                    setActiveTab('journal');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 font-bold text-xs shrink-0 cursor-pointer border border-sky-500/30"
+                >
+                  View in Diary →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

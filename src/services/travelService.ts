@@ -1879,6 +1879,45 @@ export async function addJournalEntry(
   } catch (e) {}
 }
 
+export async function updateJournalEntry(
+  tripId: string,
+  entry: JournalEntry,
+  tripTitle?: string
+): Promise<void> {
+  // Optimistically store in localStorage
+  try {
+    const current = getStoredJournalEntries(tripId);
+    const updated = current.map((e) => (e.id === entry.id ? entry : e));
+    localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  try {
+    const memRef = doc(db, 'trips', tripId, 'memories', entry.id);
+    await Promise.race([
+      setDoc(memRef, cleanForFirestore(entry), { merge: true }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 3500))
+    ]);
+  } catch (err) {
+    console.warn('Firestore setDoc update memory warning:', err);
+  }
+
+  // Create notification for update
+  try {
+    await Promise.race([
+      generateTripNotification(
+        tripId,
+        tripTitle || 'Trip',
+        'Memory Reflection Updated',
+        `The memory "${entry.title}" (Day ${entry.day}) was updated by the Trip Planner.`,
+        'general',
+        'itinerary',
+        entry.authorName
+      ),
+      new Promise((res) => setTimeout(res, 2000))
+    ]);
+  } catch (e) {}
+}
+
 export async function deleteJournalEntry(tripId: string, entryId: string): Promise<void> {
   try {
     const current = getStoredJournalEntries(tripId);

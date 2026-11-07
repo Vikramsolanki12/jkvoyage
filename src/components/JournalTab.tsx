@@ -202,16 +202,16 @@ export const JournalTab: React.FC<JournalTabProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28 sm:pb-10">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-sky-500" />
+              <BookOpen className="w-5 h-5 text-sky-500 shrink-0" />
               <span>Trip Diary & Photo Journal</span>
             </h3>
-            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/30">
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/30 whitespace-nowrap">
               Synced with Cloud Database
             </span>
           </div>
@@ -220,10 +220,10 @@ export const JournalTab: React.FC<JournalTabProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5">
           <button
             onClick={() => setShowDossierModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Export Trip Dossier</span>
@@ -231,7 +231,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-black shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-black shadow-md shadow-sky-500/20 transition-all hover:scale-[1.02] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Photo & Reflection</span>
@@ -410,244 +410,262 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
       {/* Write Memory & Upload Photo Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl text-slate-900 dark:text-slate-100 max-h-[92vh] overflow-y-auto">
-            <button
-              onClick={() => setModalOpen(false)}
-              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl text-slate-900 dark:text-slate-100 max-h-[85dvh] sm:max-h-[90vh] flex flex-col overflow-hidden my-auto">
+            {/* Modal Header */}
+            <div className="shrink-0 p-5 sm:p-6 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 bg-white dark:bg-slate-900">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-sky-500 shrink-0" />
+                  <span>Add Photo & Write Diary Story</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Attach travel pictures and describe your memorable moments from {trip.title}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mb-1 flex items-center gap-2">
-              <Camera className="w-5 h-5 text-sky-500" />
-              <span>Add Photo & Write Diary Story</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-              Attach travel pictures and describe your memorable moments from {trip.title}.
-            </p>
+            {/* Modal Form */}
+            <form onSubmit={handleAddEntry} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 overscroll-contain">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Trip Day
+                    </label>
+                    <select
+                      value={day}
+                      onChange={(e) => setDay(Number(e.target.value))}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-600 dark:text-sky-400 focus:outline-none"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 21].map((d) => (
+                        <option key={d} value={d}>
+                          Day {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-            <form onSubmit={handleAddEntry} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Moment Rating
+                    </label>
+                    <div className="flex items-center gap-1.5 pt-1.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRating(star)}
+                          className="text-amber-400 hover:scale-110 transition-transform cursor-pointer"
+                        >
+                          <Star
+                            className={`w-4 h-4 ${star <= rating ? 'fill-current' : 'text-slate-300 dark:text-slate-700'}`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Trip Day
+                    Title of the Memory / Photo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sunrise view at the mountain ridge"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                {/* Photo Upload & Gallery Attachment Options */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Add Photos to Memory (Upload or Snap)
+                    </label>
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-full">
+                      {attachedPhotos.length}/8 Photos • Auto-Compressed ⚡
+                    </span>
+                  </div>
+
+                  {/* Upload & Camera Buttons */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      multiple
+                      onChange={handleFilesChange}
+                      className="hidden"
+                      id="journal-photo-files"
+                    />
+                    <label
+                      htmlFor="journal-photo-files"
+                      className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Photos</span>
+                    </label>
+
+                    <input
+                      type="file"
+                      ref={cameraInputRef}
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFilesChange}
+                      className="hidden"
+                      id="journal-camera-snap"
+                    />
+                    <label
+                      htmlFor="journal-camera-snap"
+                      className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Snap Photo</span>
+                    </label>
+
+                    <span className="text-[11px] text-slate-400">or paste image link</span>
+                  </div>
+
+                  {/* Compressing State */}
+                  {compressingPhotos && (
+                    <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center gap-2 text-xs text-sky-600 dark:text-sky-400 font-bold animate-pulse">
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Compressing & optimizing photos for cloud sync...</span>
+                    </div>
+                  )}
+
+                  {/* Direct Image URL input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://images.unsplash.com/..."
+                      value={customUrlInput}
+                      onChange={(e) => setCustomUrlInput(e.target.value)}
+                      className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomUrl}
+                      disabled={!customUrlInput.trim()}
+                      className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                    >
+                      Add Link
+                    </button>
+                  </div>
+
+                  {/* Attached Photos Preview Strip */}
+                  {attachedPhotos.length > 0 && (
+                    <div className="pt-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
+                        Attached Photos ({attachedPhotos.length})
+                      </span>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                        {attachedPhotos.map((photo, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950"
+                          >
+                            <img
+                              src={photo}
+                              alt={`Preview ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              className="absolute top-1 right-1 p-1 rounded-md bg-black/70 text-white hover:bg-rose-600 transition-colors cursor-pointer"
+                              title="Remove photo"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            {idx === 0 && (
+                              <span className="absolute bottom-0 inset-x-0 bg-sky-500 text-slate-950 text-[8px] font-black uppercase text-center py-0.5">
+                                Cover
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {errorMessage && (
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Travel Mood Tag
                   </label>
                   <select
-                    value={day}
-                    onChange={(e) => setDay(Number(e.target.value))}
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-600 dark:text-sky-400 focus:outline-none"
+                    value={mood}
+                    onChange={(e) => setMood(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 21].map((d) => (
-                      <option key={d} value={d}>
-                        Day {d}
-                      </option>
-                    ))}
+                    <option value="Happy & Energized ✨">Happy & Energized ✨</option>
+                    <option value="Awe-Inspired & Majestic 🏰">Awe-Inspired & Majestic 🏰</option>
+                    <option value="Peaceful & Relaxed 🌅">Peaceful & Relaxed 🌅</option>
+                    <option value="Foodie Bliss 🥟">Foodie Bliss 🥟</option>
+                    <option value="Wild Adventure 🏔️">Wild Adventure 🏔️</option>
+                    <option value="Exhausted but Thrilled 🎒">Exhausted but Thrilled 🎒</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Moment Rating
+                    Story & Reflections *
                   </label>
-                  <div className="flex items-center gap-1.5 pt-1.5">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setRating(star)}
-                        className="text-amber-400 hover:scale-110 transition-transform cursor-pointer"
-                      >
-                        <Star
-                          className={`w-4 h-4 ${star <= rating ? 'fill-current' : 'text-slate-300 dark:text-slate-700'}`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Title of the Memory / Photo *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Sunrise view at the mountain ridge"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-
-              {/* Photo Upload & Gallery Attachment Options */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Add Photos to Memory (Upload or Snap)
-                  </label>
-                  <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-full">
-                    {attachedPhotos.length}/8 Photos • Auto-Compressed ⚡
-                  </span>
-                </div>
-
-                {/* Upload & Camera Buttons */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    multiple
-                    onChange={handleFilesChange}
-                    className="hidden"
-                    id="journal-photo-files"
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Describe this moment. What happened? What sights, tastes, laughter, and sounds stood out?"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 resize-none"
                   />
-                  <label
-                    htmlFor="journal-photo-files"
-                    className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Photos</span>
-                  </label>
-
-                  <input
-                    type="file"
-                    ref={cameraInputRef}
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFilesChange}
-                    className="hidden"
-                    id="journal-camera-snap"
-                  />
-                  <label
-                    htmlFor="journal-camera-snap"
-                    className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Snap Photo</span>
-                  </label>
-
-                  <span className="text-[11px] text-slate-400">or paste image link</span>
                 </div>
-
-                {/* Compressing State */}
-                {compressingPhotos && (
-                  <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center gap-2 text-xs text-sky-600 dark:text-sky-400 font-bold animate-pulse">
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Compressing & optimizing photos for cloud sync...</span>
-                  </div>
-                )}
-
-                {/* Direct Image URL input */}
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={customUrlInput}
-                    onChange={(e) => setCustomUrlInput(e.target.value)}
-                    className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomUrl}
-                    disabled={!customUrlInput.trim()}
-                    className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                  >
-                    Add Link
-                  </button>
-                </div>
-
-                {/* Attached Photos Preview Strip */}
-                {attachedPhotos.length > 0 && (
-                  <div className="pt-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
-                      Attached Photos ({attachedPhotos.length})
-                    </span>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {attachedPhotos.map((photo, idx) => (
-                        <div
-                          key={idx}
-                          className="relative group h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950"
-                        >
-                          <img
-                            src={photo}
-                            alt={`Preview ${idx + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePhoto(idx)}
-                            className="absolute top-1 right-1 p-1 rounded-md bg-black/70 text-white hover:bg-rose-600 transition-colors cursor-pointer"
-                            title="Remove photo"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                          {idx === 0 && (
-                            <span className="absolute bottom-0 inset-x-0 bg-sky-500 text-slate-950 text-[8px] font-black uppercase text-center py-0.5">
-                              Cover
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Travel Mood Tag
-                </label>
-                <select
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-                >
-                  <option value="Happy & Energized ✨">Happy & Energized ✨</option>
-                  <option value="Awe-Inspired & Majestic 🏰">Awe-Inspired & Majestic 🏰</option>
-                  <option value="Peaceful & Relaxed 🌅">Peaceful & Relaxed 🌅</option>
-                  <option value="Foodie Bliss 🥟">Foodie Bliss 🥟</option>
-                  <option value="Wild Adventure 🏔️">Wild Adventure 🏔️</option>
-                  <option value="Exhausted but Thrilled 🎒">Exhausted but Thrilled 🎒</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Story & Reflections *
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Describe this moment. What happened? What sights, tastes, laughter, and sounds stood out?"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              {/* Action Buttons Footer - ALWAYS in view, never hidden behind down navbar */}
+              <div className="shrink-0 p-4 sm:p-5 pt-3 border-t border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-center justify-end gap-2.5 z-10">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-sky-500/20 cursor-pointer disabled:opacity-50"
+                  className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-sky-500/20 cursor-pointer disabled:opacity-50 text-center flex items-center justify-center gap-1.5"
                 >
-                  {submitting ? 'Saving...' : 'Save Reflection'}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    'Save Reflection'
+                  )}
                 </button>
               </div>
             </form>
@@ -657,8 +675,8 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
       {/* Full Photo Modal / Multi-Photo Lightbox */}
       {activePhotoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/95 backdrop-blur-md animate-in fade-in">
-          <div className="relative max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6 bg-slate-950/95 backdrop-blur-md animate-in fade-in">
+          <div className="relative max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90vh] my-auto">
             {/* Header */}
             <div className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800 text-white shrink-0">
               <div className="flex items-center gap-2.5 truncate mr-2">
@@ -775,18 +793,21 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
       {/* Exportable Trip Dossier Modal - Complete with Diary Photos & Write-ups */}
       {showDossierModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-4xl bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <button
-              onClick={() => setShowDossierModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors print:hidden"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl bg-white text-slate-900 rounded-3xl shadow-2xl max-h-[88dvh] sm:max-h-[92vh] flex flex-col overflow-hidden my-auto">
+            {/* Scrollable Dossier Content Area */}
+            <div className="relative flex-1 overflow-y-auto p-5 sm:p-8 overscroll-contain">
+              <button
+                onClick={() => setShowDossierModal(false)}
+                className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors print:hidden cursor-pointer"
+                aria-label="Close dossier"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-            {/* Dossier Header */}
-            <div className="border-b-2 border-slate-900 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+              {/* Dossier Header */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
                 <span className="text-[11px] font-black uppercase tracking-wider text-sky-600 block">
                   Official Travel Dossier & Journey Chronicles
                 </span>
@@ -912,21 +933,25 @@ export const JournalTab: React.FC<JournalTabProps> = ({
               </div>
             </div>
 
-            {/* Print Action Bar */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between print:hidden">
-              <span className="text-xs text-slate-500">
+            </div>
+
+            {/* Print Action Bar - Pinned at bottom of modal */}
+            <div className="shrink-0 p-4 sm:p-5 border-t border-slate-200 bg-white/95 backdrop-blur-sm flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden z-10">
+              <span className="text-xs text-slate-500 text-center sm:text-left">
                 Prepared by JKVoyage • Owned by JKSoftonics
               </span>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
+                  type="button"
                   onClick={() => setShowDossierModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer text-center"
                 >
                   Close
                 </button>
                 <button
+                  type="button"
                   onClick={handlePrintDossier}
-                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+                  className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer text-center"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Document</span>

@@ -104,7 +104,6 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const currentUserName = userProfile?.displayName || currentUser?.displayName || 'You';
   // For Trip Planner: filter to 'all' or by specific traveller. For Traveller: toggle between 'all' and 'mine'
   const [plannerFilter, setPlannerFilter] = useState<string>('all');
-  const [travellerLedgerFilter, setTravellerLedgerFilter] = useState<'all' | 'mine'>('all');
 
   // Form states
   const [transactionType, setTransactionType] = useState<ExpenseTransactionType>('expense');
@@ -418,8 +417,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
       return (
         isMyTravelerName(exp.splitTargetUser) ||
         isMyTravelerName(exp.paidBy) ||
-        (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
-        exp.createdBy === currentUser?.uid
+        (!exp.paidBy && exp.paidByUid === currentUser?.uid)
       );
     }
 
@@ -431,8 +429,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         inCustom ||
         inSplits ||
         isMyTravelerName(exp.paidBy) ||
-        (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
-        exp.createdBy === currentUser?.uid
+        (!exp.paidBy && exp.paidByUid === currentUser?.uid)
       );
     }
 
@@ -440,13 +437,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     return (
       getTravellerShare(exp) > 0 ||
       isMyTravelerName(exp.paidBy) ||
-      (!exp.paidBy && exp.paidByUid === currentUser?.uid) ||
-      exp.createdBy === currentUser?.uid
+      (!exp.paidBy && exp.paidByUid === currentUser?.uid)
     );
   }, [currentUser, isMyTravelerName, getTravellerShare]);
 
   // For Trip Planner: Show all travellers' expenses! Can filter by individual traveller or view 'all'
-  // For Traveller: Show all group transactions or filter to personal transactions via travellerLedgerFilter
+  // For Particular User (non-planner): Strictly show ONLY their transactions (not all users' transactions)
   // Always sorted firstly date-wise (old down, new up) and then added-wise (old down, new up)
   const visibleExpenses = React.useMemo(() => {
     return expenses
@@ -462,13 +458,11 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           const inCustom = Array.isArray(exp.splitWithUsers) && exp.splitWithUsers.some((u) => u.trim().toLowerCase() === target);
           return payer === target || receiver === target || splitTarget === target || inCustom;
         }
-        if (travellerLedgerFilter === 'all') {
-          return true;
-        }
+        // Non-planner travellers strictly see ONLY their own transactions
         return isMyOwnExpense(exp);
       })
       .sort(compareTransactionsDesc);
-  }, [expenses, isTripPlanner, plannerFilter, travellerLedgerFilter, isMyOwnExpense, compareTransactionsDesc]);
+  }, [expenses, isTripPlanner, plannerFilter, isMyOwnExpense, compareTransactionsDesc]);
 
   // Calculate personal totals for Traveller:
   const myPaidExpenses = expenses
@@ -1344,7 +1338,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>By Traveller</span>
+              <span>{isTripPlanner ? 'By Traveller' : 'My Statement'}</span>
             </button>
             <button
               type="button"
@@ -1594,20 +1588,22 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
                       <span>Received: ₹{Math.round(b.received)}</span>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedHistoryTraveller(member);
-                      setActiveView('travellers');
-                    }}
-                    className="w-full mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center justify-between group-hover:text-sky-500 cursor-pointer transition-colors"
-                  >
-                    <span className="flex items-center gap-1">
-                      <History className="w-3 h-3" />
-                      <span>View History ({getMemberTransactionCount(member)})</span>
-                    </span>
-                    <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                  </button>
+                  {(isTripPlanner || isMe) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedHistoryTraveller(isTripPlanner ? member : myCanonicalMember);
+                        setActiveView('travellers');
+                      }}
+                      className="w-full mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center justify-between group-hover:text-sky-500 cursor-pointer transition-colors"
+                    >
+                      <span className="flex items-center gap-1">
+                        <History className="w-3 h-3" />
+                        <span>{isMe ? 'View My Transactions' : `View History (${getMemberTransactionCount(member)})`}</span>
+                      </span>
+                      <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -1626,8 +1622,6 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             <span>
               {isTripPlanner
                 ? "All Travellers' Expenses Ledger"
-                : travellerLedgerFilter === 'all'
-                ? "All Group Transactions Ledger"
                 : "My Personal Transactions Ledger"}
             </span>
             <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
@@ -1637,9 +1631,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isTripPlanner
               ? 'Complete list of all user expenses and payment settlements across all travellers.'
-              : travellerLedgerFilter === 'all'
-              ? `Viewing all ${expenses.length} group transactions across all travellers in this trip.`
-              : 'Viewing only transactions where you paid, received settlement, or consumed a split share.'}
+              : 'Viewing strictly transactions where you paid, received settlement, or have an allocated split share.'}
           </p>
         </div>
 
@@ -1683,41 +1675,16 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setTravellerLedgerFilter('all')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  travellerLedgerFilter === 'all'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5 text-sky-500" />
-                <span>All Group Ledger</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                  {expenses.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTravellerLedgerFilter('mine')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  travellerLedgerFilter === 'mine'
-                    ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <User className="w-3.5 h-3.5 text-sky-500" />
-                <span>My Transactions</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                  {expenses.filter(isMyOwnExpense).length}
-                </span>
-              </button>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-xs font-bold">
+              <User className="w-3.5 h-3.5 text-sky-500" />
+              <span>My Transactions Only</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-sky-200/50 dark:bg-sky-800 text-sky-900 dark:text-sky-200 font-black">
+                {visibleExpenses.length}
+              </span>
             </div>
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/40 text-slate-500 text-[11px] border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/40 text-slate-500 text-[11px] border border-slate-200 dark:border-slate-800">
               <Lock className="w-3 h-3 text-sky-500 shrink-0" />
-              <span>Read-only view</span>
+              <span>Private personal view</span>
             </div>
           </div>
         )}
@@ -2002,95 +1969,131 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             )}
           </div>
 
-          {/* Traveller Selector Ribbon (Available to all users) */}
-          <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between mb-2.5 px-1">
-              <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-sky-500" />
-                <span>Select Traveller ({activeTravelers.length})</span>
-              </div>
-              <span className="text-[11px] text-slate-400">
-                Switch traveller to view itemized breakdown
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedHistoryTraveller('all');
-                  setTravellerTxnFilter('all');
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-                  selectedHistoryTraveller === 'all'
-                    ? 'bg-sky-500 text-slate-950 font-black shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>All Travellers Overview</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                  selectedHistoryTraveller === 'all'
-                    ? 'bg-slate-950/20 text-slate-950 font-black'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>
-                  {activeTravelers.length}
+          {isTripPlanner ? (
+            /* Traveller Selector Ribbon (Trip Planner only) */
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between mb-2.5 px-1">
+                <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Select Traveller ({activeTravelers.length})</span>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  Switch traveller to view itemized breakdown
                 </span>
-              </button>
+              </div>
 
-              {activeTravelers.map((member) => {
-                const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
-                const net = b.paid - b.owes - b.received;
-                const isSelected = selectedHistoryTraveller === member;
-                const txnCount = getMemberTransactionCount(member);
-                const isMe = isMyTravelerName(member);
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedHistoryTraveller('all');
+                    setTravellerTxnFilter('all');
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+                    selectedHistoryTraveller === 'all'
+                      ? 'bg-sky-500 text-slate-950 font-black shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>All Travellers Overview</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
+                    selectedHistoryTraveller === 'all'
+                      ? 'bg-slate-950/20 text-slate-950 font-black'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {activeTravelers.length}
+                  </span>
+                </button>
 
-                return (
-                  <button
-                    key={member}
-                    type="button"
-                    onClick={() => {
-                      setSelectedHistoryTraveller(member);
-                      setTravellerTxnFilter('all');
-                    }}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
-                      isSelected
-                        ? 'bg-sky-500 text-slate-950 font-black border-sky-400 shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <User className={`w-3.5 h-3.5 ${isSelected ? 'text-slate-950' : 'text-slate-400'}`} />
-                    <span>{member}</span>
-                    {isMe && (
-                      <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded ${
-                        isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                {activeTravelers.map((member) => {
+                  const b = memberBalances[member] || { paid: 0, owes: 0, received: 0 };
+                  const net = b.paid - b.owes - b.received;
+                  const isSelected = selectedHistoryTraveller === member;
+                  const txnCount = getMemberTransactionCount(member);
+                  const isMe = isMyTravelerName(member);
+
+                  return (
+                    <button
+                      key={member}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHistoryTraveller(member);
+                        setTravellerTxnFilter('all');
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
+                        isSelected
+                          ? 'bg-sky-500 text-slate-950 font-black border-sky-400 shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <User className={`w-3.5 h-3.5 ${isSelected ? 'text-slate-950' : 'text-slate-400'}`} />
+                      <span>{member}</span>
+                      {isMe && (
+                        <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded ${
+                          isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                        }`}>
+                          You
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        isSelected
+                          ? 'bg-slate-950/15 text-slate-950'
+                          : net >= 0
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                       }`}>
-                        You
+                        {net >= 0 ? `+₹${Math.round(net)}` : `-₹${Math.abs(Math.round(net))}`}
                       </span>
-                    )}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                      isSelected
-                        ? 'bg-slate-950/15 text-slate-950'
-                        : net >= 0
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                    }`}>
-                      {net >= 0 ? `+₹${Math.round(net)}` : `-₹${Math.abs(Math.round(net))}`}
-                    </span>
-                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
-                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                    }`}>
-                      {txnCount}
-                    </span>
-                  </button>
-                );
-              })}
+                      <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                        isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {txnCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Non-planner: Clean personal indicator */
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xs">
+                  {myCanonicalMember.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-slate-900 dark:text-white">
+                      {myCanonicalMember}
+                    </span>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                      Your Personal Statement
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Showing strictly your personal transactions, paid contributions, and consumed split shares
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Net Balance:</span>
+                <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${
+                  (memberBalances[myCanonicalMember]?.paid - memberBalances[myCanonicalMember]?.owes - memberBalances[myCanonicalMember]?.received) >= 0
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                }`}>
+                  {(memberBalances[myCanonicalMember]?.paid - memberBalances[myCanonicalMember]?.owes - memberBalances[myCanonicalMember]?.received) >= 0
+                    ? `Will receive ₹${Math.round(memberBalances[myCanonicalMember]?.paid - memberBalances[myCanonicalMember]?.owes - memberBalances[myCanonicalMember]?.received)}`
+                    : `Owes ₹${Math.abs(Math.round(memberBalances[myCanonicalMember]?.paid - memberBalances[myCanonicalMember]?.owes - memberBalances[myCanonicalMember]?.received))}`}
+                </span>
+              </div>
+            </div>
+          )}
 
-          {/* VIEW A: SPECIFIC TRAVELLER SELECTED */}
-          {selectedHistoryTraveller !== 'all' && (() => {
-            const currentMember = selectedHistoryTraveller;
+          {/* VIEW A: SPECIFIC TRAVELLER SELECTED OR REGULAR USER STATEMENT */}
+          {(isTripPlanner ? selectedHistoryTraveller !== 'all' : true) && (() => {
+            const currentMember = isTripPlanner ? selectedHistoryTraveller : myCanonicalMember;
             const b = memberBalances[currentMember] || { paid: 0, owes: 0, received: 0 };
             const net = b.paid - b.owes - b.received;
             const isMe = isMyTravelerName(currentMember);
@@ -2459,8 +2462,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
             );
           })()}
 
-          {/* VIEW B: ALL TRAVELLERS OVERVIEW */}
-          {selectedHistoryTraveller === 'all' && (
+          {/* VIEW B: ALL TRAVELLERS OVERVIEW (TRIP PLANNER ONLY) */}
+          {isTripPlanner && selectedHistoryTraveller === 'all' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex items-center justify-between px-1">
                 <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">

@@ -1800,6 +1800,24 @@ export function getStoredJournalEntries(tripId: string): JournalEntry[] {
   return [];
 }
 
+export function saveStoredJournalEntries(tripId: string, items: JournalEntry[]): void {
+  try {
+    localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(items));
+  } catch (err) {
+    // If quota exceeded due to large base64 strings, strip base64 data to keep app functional
+    try {
+      const sanitized = items.map((item) => ({
+        ...item,
+        photoUrl: item.photoUrl?.startsWith('data:') ? undefined : item.photoUrl,
+        photos: (item.photos || []).map((p) => (p.startsWith('data:') ? '' : p)).filter(Boolean)
+      }));
+      localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(sanitized));
+    } catch (innerErr) {
+      console.warn('LocalStorage save failed for journal entries:', innerErr);
+    }
+  }
+}
+
 export function subscribeJournalEntries(
   tripId: string,
   onData: (items: JournalEntry[]) => void
@@ -1820,9 +1838,7 @@ export function subscribeJournalEntries(
           const items: JournalEntry[] = [];
           snapshot.forEach((docSnap) => items.push(docSnap.data() as JournalEntry));
           items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          try {
-            localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(items));
-          } catch (e) {}
+          saveStoredJournalEntries(tripId, items);
           onData(items);
         } else {
           onData(getStoredJournalEntries(tripId));
@@ -1845,11 +1861,9 @@ export async function addJournalEntry(
   tripTitle?: string
 ): Promise<void> {
   // Optimistically store in localStorage
-  try {
-    const current = getStoredJournalEntries(tripId);
-    const updated = [entry, ...current.filter((e) => e.id !== entry.id)];
-    localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(updated));
-  } catch (e) {}
+  const current = getStoredJournalEntries(tripId);
+  const updated = [entry, ...current.filter((e) => e.id !== entry.id)];
+  saveStoredJournalEntries(tripId, updated);
 
   const path = `trips/${tripId}/memories/${entry.id}`;
   try {
@@ -1885,11 +1899,9 @@ export async function updateJournalEntry(
   tripTitle?: string
 ): Promise<void> {
   // Optimistically store in localStorage
-  try {
-    const current = getStoredJournalEntries(tripId);
-    const updated = current.map((e) => (e.id === entry.id ? entry : e));
-    localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(updated));
-  } catch (e) {}
+  const current = getStoredJournalEntries(tripId);
+  const updated = current.map((e) => (e.id === entry.id ? entry : e));
+  saveStoredJournalEntries(tripId, updated);
 
   try {
     const memRef = doc(db, 'trips', tripId, 'memories', entry.id);
@@ -1919,11 +1931,9 @@ export async function updateJournalEntry(
 }
 
 export async function deleteJournalEntry(tripId: string, entryId: string): Promise<void> {
-  try {
-    const current = getStoredJournalEntries(tripId);
-    const updated = current.filter((e) => e.id !== entryId);
-    localStorage.setItem(`jkvoyage_journal_${tripId}`, JSON.stringify(updated));
-  } catch (e) {}
+  const current = getStoredJournalEntries(tripId);
+  const updated = current.filter((e) => e.id !== entryId);
+  saveStoredJournalEntries(tripId, updated);
 
   const path = `trips/${tripId}/memories/${entryId}`;
   try {

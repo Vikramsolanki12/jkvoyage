@@ -85,6 +85,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({
   } | null>(null);
 
   // Form State
+  const MAX_PHOTOS = 30;
   const [day, setDay] = useState(1);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -94,6 +95,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [compressingPhotos, setCompressingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -110,36 +112,86 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
   const totalSpent = expenses.reduce((sum, e) => sum + e.amountINR, 0);
 
-  // Handle local image file upload, cloud storage upload & high-performance compression
+  // Handle local image file upload, cloud storage upload & high-performance parallel compression
   const handleFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0) return;
 
+    const remainingSlots = MAX_PHOTOS - attachedPhotos.length;
+    if (remainingSlots <= 0) {
+      setErrorMessage(`Maximum limit of ${MAX_PHOTOS} photos reached for this memory reflection.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      return;
+    }
+
+    const validFiles: File[] = [];
+    for (let i = 0; i < rawFiles.length; i++) {
+      const file = rawFiles[i];
+      const isImg = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(file.name);
+      if (isImg) {
+        validFiles.push(file);
+      }
+    }
+
+    if (validFiles.length === 0) {
+      setErrorMessage('Please select valid image files (JPG, PNG, WebP, HEIC).');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      return;
+    }
+
+    const filesToUpload = validFiles.slice(0, remainingSlots);
     setCompressingPhotos(true);
     setErrorMessage(null);
+    setUploadProgress({ current: 0, total: filesToUpload.length });
 
     const newPhotos: string[] = [];
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const isImg = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(file.name);
-        if (!isImg) continue;
+    let completedCount = 0;
 
-        // Auto-compress and securely upload to cloud storage endpoint (/api/documents/upload)
-        const uploadResult = await uploadPhotoFile(file, trip.id, currentUser?.uid);
-        if (uploadResult.url) {
-          newPhotos.push(uploadResult.url);
+    try {
+      // Concurrently upload in batches of 4 to prevent network throttling while maximizing upload speed
+      const BATCH_SIZE = 4;
+      for (let i = 0; i < filesToUpload.length; i += BATCH_SIZE) {
+        const batch = filesToUpload.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (file) => {
+          try {
+            const uploadResult = await uploadPhotoFile(file, trip.id, currentUser?.uid);
+            return uploadResult.url || null;
+          } catch (err) {
+            console.warn('Photo upload failed for file:', file.name, err);
+            return null;
+          } finally {
+            completedCount++;
+            setUploadProgress({ current: completedCount, total: filesToUpload.length });
+          }
+        });
+
+        const batchResults = await Promise.allSettled(batchPromises);
+        for (const res of batchResults) {
+          if (res.status === 'fulfilled' && res.value) {
+            newPhotos.push(res.value);
+          }
         }
       }
 
       if (newPhotos.length > 0) {
-        setAttachedPhotos((prev) => [...prev, ...newPhotos].slice(0, 8)); // max 8 photos per entry
+        setAttachedPhotos((prev) => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
+      }
+
+      if (newPhotos.length < filesToUpload.length) {
+        setErrorMessage(
+          `Uploaded ${newPhotos.length} photo(s). ${filesToUpload.length - newPhotos.length} photo(s) could not be processed.`
+        );
+      } else if (validFiles.length > remainingSlots) {
+        setErrorMessage(`Added ${newPhotos.length} photos (${validFiles.length - remainingSlots} skipped as max limit is ${MAX_PHOTOS}).`);
       }
     } catch (err: any) {
       console.error('Failed to process/upload photos:', err);
-      setErrorMessage('Could not process photo. Please try a different image.');
+      setErrorMessage('Could not process some photos. Please try again.');
     } finally {
       setCompressingPhotos(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
@@ -147,7 +199,11 @@ export const JournalTab: React.FC<JournalTabProps> = ({
 
   const handleAddCustomUrl = () => {
     if (!customUrlInput.trim()) return;
-    setAttachedPhotos((prev) => [...prev, customUrlInput.trim()].slice(0, 8));
+    if (attachedPhotos.length >= MAX_PHOTOS) {
+      setErrorMessage(`Maximum limit of ${MAX_PHOTOS} photos reached.`);
+      return;
+    }
+    setAttachedPhotos((prev) => [...prev, customUrlInput.trim()].slice(0, MAX_PHOTOS));
     setCustomUrlInput('');
   };
 
@@ -619,8 +675,8 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                     <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
                       Add Photos to Memory (Upload or Snap)
                     </label>
-                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-full">
-                      {attachedPhotos.length}/8 Photos • Auto-Compressed ⚡
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2.5 py-1 rounded-full">
+                      {attachedPhotos.length}/{MAX_PHOTOS} Photos • Cloud Synced ⚡
                     </span>
                   </div>
 
@@ -634,10 +690,13 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                       onChange={handleFilesChange}
                       className="hidden"
                       id="journal-photo-files"
+                      disabled={compressingPhotos || attachedPhotos.length >= MAX_PHOTOS}
                     />
                     <label
                       htmlFor="journal-photo-files"
-                      className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                      className={`px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all ${
+                        compressingPhotos || attachedPhotos.length >= MAX_PHOTOS ? 'opacity-50 pointer-events-none' : ''
+                      }`}
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Upload Photos</span>
@@ -651,10 +710,13 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                       onChange={handleFilesChange}
                       className="hidden"
                       id="journal-camera-snap"
+                      disabled={compressingPhotos || attachedPhotos.length >= MAX_PHOTOS}
                     />
                     <label
                       htmlFor="journal-camera-snap"
-                      className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                      className={`px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all ${
+                        compressingPhotos || attachedPhotos.length >= MAX_PHOTOS ? 'opacity-50 pointer-events-none' : ''
+                      }`}
                     >
                       <Camera className="w-3.5 h-3.5" />
                       <span>Snap Photo</span>
@@ -663,11 +725,34 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                     <span className="text-[11px] text-slate-400">or paste image link</span>
                   </div>
 
-                  {/* Compressing State */}
+                  {/* Compressing & Uploading Progress State */}
                   {compressingPhotos && (
-                    <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center gap-2 text-xs text-sky-600 dark:text-sky-400 font-bold animate-pulse">
-                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                      <span>Compressing & optimizing photos for cloud sync...</span>
+                    <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 flex flex-col gap-1.5 text-xs text-sky-600 dark:text-sky-400 font-bold">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                          <span>
+                            {uploadProgress
+                              ? `Compressing & uploading (${uploadProgress.current} / ${uploadProgress.total} photos)...`
+                              : 'Compressing & uploading photos...'}
+                          </span>
+                        </div>
+                        {uploadProgress && uploadProgress.total > 0 && (
+                          <span className="text-[11px] font-mono">
+                            {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      {uploadProgress && uploadProgress.total > 0 && (
+                        <div className="w-full bg-sky-500/20 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-sky-500 h-full transition-all duration-200"
+                            style={{
+                              width: `${Math.min(100, Math.round((uploadProgress.current / uploadProgress.total) * 100))}%`
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -678,12 +763,13 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                       placeholder="https://images.unsplash.com/..."
                       value={customUrlInput}
                       onChange={(e) => setCustomUrlInput(e.target.value)}
-                      className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                      disabled={compressingPhotos || attachedPhotos.length >= MAX_PHOTOS}
+                      className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 disabled:opacity-50"
                     />
                     <button
                       type="button"
                       onClick={handleAddCustomUrl}
-                      disabled={!customUrlInput.trim()}
+                      disabled={!customUrlInput.trim() || compressingPhotos || attachedPhotos.length >= MAX_PHOTOS}
                       className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
                     >
                       Add Link
@@ -693,10 +779,21 @@ export const JournalTab: React.FC<JournalTabProps> = ({
                   {/* Attached Photos Preview Strip */}
                   {attachedPhotos.length > 0 && (
                     <div className="pt-1">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
-                        Attached Photos ({attachedPhotos.length})
-                      </span>
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">
+                          Attached Photos ({attachedPhotos.length}/{MAX_PHOTOS})
+                        </span>
+                        {attachedPhotos.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setAttachedPhotos([])}
+                            className="text-[10px] text-rose-500 hover:text-rose-600 font-bold hover:underline"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-56 overflow-y-auto pr-1">
                         {attachedPhotos.map((photo, idx) => (
                           <div
                             key={idx}

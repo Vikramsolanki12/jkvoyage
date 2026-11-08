@@ -312,8 +312,8 @@ export async function uploadPhotoFile(
   const compressed = await compressImageFile(file, {
     maxWidth: 1600,
     maxHeight: 1600,
-    quality: 0.8,
-    maxSizeBytes: 350 * 1024
+    quality: 0.76,
+    maxSizeBytes: 180 * 1024
   });
 
   try {
